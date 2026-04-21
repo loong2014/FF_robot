@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "robot-server"
+version = "0.1.0"
+description = "Robot OS Lite server runtime"
+requires-python = ">=3.8"
+dependencies = [
+    # dbus-fast 是 dbus-next 的活跃维护 fork，API 兼容，
+    # 修复了 dbus-next 0.2.3 在繁忙 system bus 上丢 method reply 的问题。
+    # 保留 dbus-next 作为离线 / 受限环境下的 fallback。
+    "dbus-fast>=2.0.0; platform_system == 'Linux'",
+    "dbus-next>=0.2.3",
+    "paho-mqtt>=2.1.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["robot_server*"]
+

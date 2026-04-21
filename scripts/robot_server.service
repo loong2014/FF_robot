@@ -1,0 +1,62 @@
+[Unit]
+# robot_server systemd service 示例
+#
+# 部署步骤（Ubuntu 20.04 + ROS1 Noetic）：
+#   1. 将仓库放到 /opt/robot_factory（或自定义路径，同步调整 WorkingDirectory / ROBOT_FACTORY_ROOT）
+#   2. 将 .env.example 拷贝到 /etc/robot_factory/robot_server.env 并按实际改写
+#        sudo mkdir -p /etc/robot_factory
+#        sudo cp /opt/robot_factory/.env.example /etc/robot_factory/robot_server.env
+#        sudo chown root:root /etc/robot_factory/robot_server.env
+#        sudo chmod 640 /etc/robot_factory/robot_server.env
+#   3. 安装 unit
+#        sudo cp /opt/robot_factory/scripts/robot_server.service /etc/systemd/system/
+#        sudo systemctl daemon-reload
+#        sudo systemctl enable --now robot_server.service
+#   4. 观察日志
+#        sudo journalctl -u robot_server -f
+#
+# 默认仍以 root 运行，便于访问 ROS / 系统资源；BLE 现由 robot_server 进程内提供。
+
+Description=Robot Factory robot_server runtime (BLE/TCP/MQTT/ROS)
+# Documentation=<repo url>
+# BLE 默认内嵌在 robot_server 中，因此需要排在 bluetooth.service 之后；
+# teleop_robot.service / robot_ble_peripheral.service 都会占用同一蓝牙控制器，
+# 必须避免并存。
+After=network-online.target bluetooth.service
+Wants=network-online.target bluetooth.service
+Conflicts=teleop_robot.service robot_ble_peripheral.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+
+# 仓库路径（与 start_robot_server.sh 内部 ROBOT_FACTORY_ROOT 对齐）
+WorkingDirectory=/opt/robot_factory
+
+# 把敏感信息（MQTT 凭证等）放到独立 env 文件，systemd 不会打印其内容
+EnvironmentFile=-/etc/robot_factory/robot_server.env
+Environment=ROBOT_FACTORY_ROOT=/opt/robot_factory
+Environment=ROBOT_FACTORY_ENV_FILE=/etc/robot_factory/robot_server.env
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/opt/robot_factory/scripts/start_robot_server.sh
+
+# 进程被 Ctrl+C / systemctl stop 时，runtime 自身已处理 SIGINT/SIGTERM 优雅关闭
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+# 异常重启
+Restart=on-failure
+RestartSec=3
+
+# 日志：默认 journal，journalctl -u robot_server -f 即可观察
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=robot_server
+
+# 限制：防止意外占满资源，真机可按需放开
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

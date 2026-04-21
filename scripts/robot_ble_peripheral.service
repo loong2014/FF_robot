@@ -1,0 +1,18 @@
+[Unit]
+Description=Robot Factory standalone BLE peripheral
+After=network-online.target bluetooth.service
+Wants=network-online.target
+Requires=bluetooth.service
+Conflicts=teleop_robot.service
+
+[Service]
+User=root
+Type=simple
+EnvironmentFile=-/etc/default/robot_ble_peripheral
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /opt/robot_factory/scripts/robot_ble_peripheral.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

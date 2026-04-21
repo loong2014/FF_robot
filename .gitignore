@@ -1,0 +1,64 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# Flutter / Dart (apps/robot_app, mobile_sdk, protocol/dart)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+**/doc/api/
+coverage/
+
+# Python (robot_server, protocol/python)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+.eggs/
+*.egg-info/
+*.egg
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.hypothesis/
+
+# Logs & local env
+*.log
+.env
+.env.*
+!.env.example
+
+# Android / iOS / 桌面 — 添加 Flutter 平台目录后常见本地/缓存产物
+**/android/.gradle/
+**/android/captures/
+**/android/local.properties
+**/android/key.properties
+**/*.jks
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/ephemeral/
+**/macos/Flutter/ephemeral/
+**/linux/flutter/ephemeral/
+**/windows/flutter/ephemeral/
