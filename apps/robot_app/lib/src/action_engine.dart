@@ -4,20 +4,20 @@ import 'package:mobile_sdk/mobile_sdk.dart';
 
 import 'action_models.dart';
 
-typedef _SleepFn = Future<void> Function(Duration);
-typedef _NowFn = DateTime Function();
+typedef SleepFn = Future<void> Function(Duration);
+typedef NowFn = DateTime Function();
 
 class ActionEngine {
   ActionEngine(
     this.client, {
-    @pragma('vm:prefer-inline') _SleepFn? sleep,
-    _NowFn? now,
+    @pragma('vm:prefer-inline') SleepFn? sleep,
+    NowFn? now,
   }) : _sleep = sleep ?? _defaultSleep,
        _now = now ?? DateTime.now;
 
   final RobotClient client;
-  final _SleepFn _sleep;
-  final _NowFn _now;
+  final SleepFn _sleep;
+  final NowFn _now;
 
   final StreamController<ActionEngineStatus> _statusController =
       StreamController<ActionEngineStatus>.broadcast();
@@ -212,6 +212,12 @@ class ActionEngine {
         break;
       case ActionCommandType.move:
         await _runMove(step);
+        break;
+      case ActionCommandType.doAction:
+        await client.doAction(step.actionId ?? 0);
+        break;
+      case ActionCommandType.doDogBehavior:
+        await client.doDogBehavior(step.behavior ?? DogBehavior.waveHand);
         break;
     }
   }

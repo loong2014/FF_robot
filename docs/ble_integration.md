@@ -8,6 +8,12 @@ BlueZ GATT 外设代码骨架。也就是说：
 - 底层的 GATT Application、Advertisement、Command/State characteristic
   实现改成了已验证版本
 
+> 2026-04-23 状态更新：根据用户反馈，客户端已经可以真实搜索、连接机器狗的 BLE
+> 服务，并完成数据交互。本轮没有再次连接机器狗复测，因此本文后续内容主要保留为
+> 环境依赖、配置和排障指南；当前剩余工作更偏稳定性回归和长时压测，而不是基础连通性。
+
+控制 payload 的具体定义见 [`docs/ble_control_data_format.md`](ble_control_data_format.md)。
+
 ## 1. 代码位置
 
 - `robot_server/robot_server/transports/ble/bluez_gatt_glib.py`
@@ -84,6 +90,8 @@ scripts/start_robot_server.sh
 如果走 systemd，`robot_server.service` 应放在 `bluetooth.service` 之后启动。
 
 ## 6. 联调步骤
+
+以下步骤对应的基础链路已经至少跑通一轮；保留此处主要用于回归或排障。
 
 1. 启动 `robot_server`
 2. 用 `BLE调试助手` 或 `nRF Connect` 扫描设备

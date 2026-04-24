@@ -287,6 +287,46 @@ void main() {
       await stateSubscription.cancel();
       await client.dispose();
     });
+
+    test('doAction sends skill invoke frame', () async {
+      final bleTransport = _FakeTransport();
+      final client = RobotClient(
+        transportFactory: (transport, options) => bleTransport,
+      );
+
+      await client.connectBLE(
+        options: const BleConnectionOptions(deviceId: 'robot-1'),
+      );
+      await client.doAction(20593);
+
+      expect(bleTransport.sentPayloads, hasLength(1));
+      final frame = decodeFrame(Uint8List.fromList(bleTransport.sentPayloads[0]));
+      final command = parseCommandPayload(frame.payload);
+      expect(command, isA<SkillInvokeCommand>());
+      expect((command as SkillInvokeCommand).actionId, 20593);
+
+      await client.dispose();
+    });
+
+    test('doDogBehavior sends skill invoke frame', () async {
+      final bleTransport = _FakeTransport();
+      final client = RobotClient(
+        transportFactory: (transport, options) => bleTransport,
+      );
+
+      await client.connectBLE(
+        options: const BleConnectionOptions(deviceId: 'robot-1'),
+      );
+      await client.doDogBehavior(DogBehavior.waveHand);
+
+      expect(bleTransport.sentPayloads, hasLength(1));
+      final frame = decodeFrame(Uint8List.fromList(bleTransport.sentPayloads[0]));
+      final command = parseCommandPayload(frame.payload);
+      expect(command, isA<SkillInvokeCommand>());
+      expect((command as SkillInvokeCommand).behaviorId, DogBehavior.waveHand);
+
+      await client.dispose();
+    });
   });
 }
 

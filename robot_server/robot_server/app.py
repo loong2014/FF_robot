@@ -12,6 +12,7 @@ from typing import List, Optional
 
 from .config import ServerConfig
 from .ros.bridge import RosControlBridge
+from .ros.skill_bridge import RosSkillBridge
 from .ros.state_bridge import RosStateBridge
 from .runtime import RobotRuntime, StateStore
 from .transports import MqttRouterTransport, TcpTransport
@@ -38,9 +39,11 @@ def build_runtime(
 ) -> RobotRuntime:
     transports = build_transports(config)
     ros_bridge = RosControlBridge(config.ros)
+    ros_skill_bridge = RosSkillBridge(config.ros)
     runtime = RobotRuntime(
         transports=transports,
         ros_bridge=ros_bridge,
+        ros_skill_bridge=ros_skill_bridge,
         state_store=state_store,
         debug_state_tick=config.debug_state_tick,
         state_hz=config.state_hz,

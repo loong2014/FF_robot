@@ -1,16 +1,39 @@
 # robot_app
 
-A new Flutter project.
+`apps/robot_app` 是仓库里的 Flutter 产品 App / 演示控制台，用来验证 `mobile_sdk`、`robot_server` 和真实机器狗链路。
 
-## Getting Started
+## 当前能力
 
-This project is a starting point for a Flutter application.
+- BLE 扫描、连接与数据交互验证
+- TCP / MQTT 连接配置弹窗
+- 连接状态展示
+- 首页快捷动作直控（stand / sit / stop / 常用 dog behavior）
+- 电量 / 姿态 / 最近 STATE 帧可视化
+- 动作序列编辑、执行、暂停、恢复、停止
+- 动作编排已支持 `move/stand/sit/stop` 以及 `do_action` / `do_dog_behavior`
 
-A few resources to get you started if this is your first Flutter project:
+## 当前定位
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+这个 App 目前是“可联调、可演示”的控制台，而不是已经完整产品化的正式 App。
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+还未完成的部分包括：
+
+- 设备绑定与持久化
+- 更完整的手动遥控 UI
+- 更细的错误恢复与引导
+- 用户级配置管理
+
+## 运行
+
+```bash
+cd /path/to/robot_factory/apps/robot_app
+flutter pub get
+flutter run
+```
+
+## 测试
+
+```bash
+cd /path/to/robot_factory/apps/robot_app
+flutter test
+```

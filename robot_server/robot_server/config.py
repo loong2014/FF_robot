@@ -103,6 +103,21 @@ class ROSConfig:
     enable_lateral: bool = False
     node_name: str = "robot_os_lite"
 
+    skill_enabled: bool = True
+    action_skill_name: str = "do_action"
+    behavior_skill_name: str = "do_dog_behavior"
+    skill_invoker: str = "robot_server"
+    skill_server_wait_sec: float = 3.0
+    action_priority: int = 30
+    stop_priority: int = 50
+    behavior_priority: int = 50
+    action_hold_time_sec: float = 5.0
+    stop_hold_time_sec: float = 2.0
+    behavior_hold_time_sec: float = 5.0
+    stand_action_id: int = 3
+    sit_action_id: int = 5
+    stop_action_id: int = 6
+
     state_enabled: bool = False
     battery_topic: str = "/battery_state"
     battery_msg_type: str = "sensor_msgs/BatteryState"
@@ -185,6 +200,30 @@ def load_config_from_env() -> ServerConfig:
             control_hz=float(os.getenv("ROBOT_ROS_HZ", "10.0")),
             enable_lateral=_env_bool("ROBOT_ROS_ENABLE_LATERAL", False),
             node_name=os.getenv("ROBOT_ROS_NODE", "robot_os_lite"),
+            skill_enabled=_env_bool("ROBOT_ROS_SKILL_ENABLED", True),
+            action_skill_name=os.getenv("ROBOT_ROS_ACTION_SKILL", "do_action"),
+            behavior_skill_name=os.getenv(
+                "ROBOT_ROS_BEHAVIOR_SKILL", "do_dog_behavior"
+            ),
+            skill_invoker=os.getenv("ROBOT_ROS_SKILL_INVOKER", "robot_server"),
+            skill_server_wait_sec=float(
+                os.getenv("ROBOT_ROS_SKILL_WAIT_SEC", "3.0")
+            ),
+            action_priority=int(os.getenv("ROBOT_ROS_ACTION_PRIORITY", "30")),
+            stop_priority=int(os.getenv("ROBOT_ROS_STOP_PRIORITY", "50")),
+            behavior_priority=int(os.getenv("ROBOT_ROS_BEHAVIOR_PRIORITY", "50")),
+            action_hold_time_sec=float(
+                os.getenv("ROBOT_ROS_ACTION_HOLD_SEC", "5.0")
+            ),
+            stop_hold_time_sec=float(
+                os.getenv("ROBOT_ROS_STOP_HOLD_SEC", "2.0")
+            ),
+            behavior_hold_time_sec=float(
+                os.getenv("ROBOT_ROS_BEHAVIOR_HOLD_SEC", "5.0")
+            ),
+            stand_action_id=int(os.getenv("ROBOT_ROS_STAND_ACTION_ID", "3")),
+            sit_action_id=int(os.getenv("ROBOT_ROS_SIT_ACTION_ID", "5")),
+            stop_action_id=int(os.getenv("ROBOT_ROS_STOP_ACTION_ID", "6")),
             state_enabled=_env_bool("ROBOT_ROS_STATE_ENABLED", False),
             battery_topic=os.getenv("ROBOT_ROS_BATTERY_TOPIC", "/battery_state"),
             battery_msg_type=os.getenv("ROBOT_ROS_BATTERY_MSG", "sensor_msgs/BatteryState"),

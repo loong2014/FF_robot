@@ -9,6 +9,7 @@ from robot_protocol import RobotState, StreamDecoder, build_state_frame, encode_
 from ..config import DebugStateTickConfig
 from ..models import TransportEnvelope
 from ..ros.bridge import RosControlBridge
+from ..ros.skill_bridge import RosSkillBridge
 from ..transports.base import RuntimeTransport
 from .control_service import RobotControlService
 from .state_store import StateStore
@@ -25,6 +26,7 @@ class RobotRuntime:
         self,
         transports: List[RuntimeTransport],
         ros_bridge: RosControlBridge,
+        ros_skill_bridge: Optional[RosSkillBridge] = None,
         state_store: Optional[StateStore] = None,
         debug_state_tick: Optional[DebugStateTickConfig] = None,
         state_hz: int = 10,
@@ -33,9 +35,14 @@ class RobotRuntime:
         self._transports = transports
         self._state_store = state_store or StateStore()
         self._ros_bridge = ros_bridge
+        self._ros_skill_bridge = ros_skill_bridge
         self._ros_state_bridge = ros_state_bridge
         self._debug_state_tick = debug_state_tick or DebugStateTickConfig()
-        self._control_service = RobotControlService(ros_bridge=self._ros_bridge, state_store=self._state_store)
+        self._control_service = RobotControlService(
+            ros_bridge=self._ros_bridge,
+            ros_skill_bridge=self._ros_skill_bridge,
+            state_store=self._state_store,
+        )
         self._decoders: Dict[str, StreamDecoder] = {}
         self._state_hz = state_hz
         self._state_task: Optional["asyncio.Task[None]"] = None
@@ -57,6 +64,8 @@ class RobotRuntime:
 
     async def start(self) -> None:
         self._ros_bridge.start()
+        if self._ros_skill_bridge is not None:
+            self._ros_skill_bridge.start()
         if self._ros_state_bridge is not None:
             try:
                 loop = asyncio.get_running_loop()
@@ -98,6 +107,8 @@ class RobotRuntime:
 
         if self._ros_state_bridge is not None:
             self._ros_state_bridge.stop()
+        if self._ros_skill_bridge is not None:
+            self._ros_skill_bridge.stop()
         self._ros_bridge.stop()
 
     async def publish_event(self, event: Dict[str, Any]) -> None:

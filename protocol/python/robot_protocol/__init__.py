@@ -13,7 +13,18 @@ from .codec import (
     parse_state_payload,
 )
 from .constants import DEFAULT_ACK_TIMEOUT_MS, DEFAULT_MAX_RETRIES, DEFAULT_STATE_HZ, MAGIC
-from .models import CommandId, DiscreteCommand, Frame, FrameType, MoveCommand, RobotState
+from .models import (
+    CommandId,
+    DiscreteCommand,
+    DogBehavior,
+    Frame,
+    FrameType,
+    MoveCommand,
+    Operation,
+    RobotState,
+    ServiceId,
+    SkillInvokeCommand,
+)
 from .stream_decoder import StreamDecoder
 
 __all__ = [
@@ -22,10 +33,14 @@ __all__ = [
     "ProtocolError",
     "CommandId",
     "DiscreteCommand",
+    "DogBehavior",
     "Frame",
     "FrameType",
     "MoveCommand",
+    "Operation",
     "RobotState",
+    "ServiceId",
+    "SkillInvokeCommand",
     "StreamDecoder",
     "DEFAULT_ACK_TIMEOUT_MS",
     "DEFAULT_MAX_RETRIES",
@@ -41,4 +56,3 @@ __all__ = [
     "parse_command_payload",
     "parse_state_payload",
 ]
-

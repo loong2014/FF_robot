@@ -5,7 +5,17 @@ from typing import Union
 
 from .constants import ANGLE_SCALE, MAGIC, MAX_PAYLOAD_LENGTH, MOVE_SCALE
 from .crc import crc16_ccitt
-from .models import CommandId, DiscreteCommand, Frame, FrameType, MoveCommand, RobotState
+from .models import (
+    CommandId,
+    DiscreteCommand,
+    Frame,
+    FrameType,
+    MoveCommand,
+    Operation,
+    RobotState,
+    ServiceId,
+    SkillInvokeCommand,
+)
 
 
 class ProtocolError(ValueError):
@@ -20,7 +30,7 @@ class PayloadError(ProtocolError):
     pass
 
 
-RobotCommand = Union[MoveCommand, DiscreteCommand]
+RobotCommand = Union[MoveCommand, DiscreteCommand, SkillInvokeCommand]
 
 
 def _scale_to_i16(value: float, scale: int) -> int:
@@ -99,6 +109,18 @@ def encode_command_payload(command: RobotCommand) -> bytes:
             _scale_to_i16(command.vy, MOVE_SCALE),
             _scale_to_i16(command.yaw, ANGLE_SCALE),
         )
+    if isinstance(command, SkillInvokeCommand):
+        return (
+            struct.pack(
+                "<BBBBB",
+                int(command.command_id),
+                int(command.service_id),
+                int(command.operation),
+                0x01 if command.require_ack else 0x00,
+                len(command.args),
+            )
+            + command.args
+        )
     return bytes([int(command.command_id)])
 
 
@@ -122,6 +144,28 @@ def parse_command_payload(payload: bytes) -> RobotCommand:
             raise PayloadError("discrete command payload must be 1 byte")
         return DiscreteCommand(command_id=CommandId(command_id))
 
+    if command_id == CommandId.SKILL_INVOKE:
+        if len(payload) < 5:
+            raise PayloadError("skill_invoke payload must be at least 5 bytes")
+        _, service_raw, operation_raw, flags, arg_len = struct.unpack("<BBBBB", payload[:5])
+        args = payload[5:]
+        if len(args) != arg_len:
+            raise PayloadError("skill_invoke arg_len does not match payload length")
+        try:
+            service_id = ServiceId(service_raw)
+        except ValueError as exc:
+            raise PayloadError(f"unsupported skill service id: {service_raw:#04x}") from exc
+        try:
+            operation = Operation(operation_raw)
+        except ValueError as exc:
+            raise PayloadError(f"unsupported skill operation: {operation_raw:#04x}") from exc
+        return SkillInvokeCommand(
+            service_id=service_id,
+            operation=operation,
+            args=args,
+            require_ack=bool(flags & 0x01),
+        )
+
     raise PayloadError(f"unsupported command id: {command_id:#04x}")
 
 
@@ -141,4 +185,3 @@ def parse_ack_payload(payload: bytes) -> int:
     if len(payload) != 1:
         raise PayloadError("ack payload must be 1 byte")
     return payload[0]
-

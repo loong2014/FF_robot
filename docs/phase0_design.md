@@ -65,8 +65,8 @@ sequenceDiagram
     App->>Queue: enqueue(move / stand / sit / stop)
     Queue->>Link: send CMD(seq)
     Link->>Server: binary frame
-    Server->>Link: ACK(seq)
     Server->>ROS: dispatch command
+    Server->>Link: ACK(seq)
     Link->>Queue: ACK(seq)
     Queue->>Queue: release inflight and send next
 ```
@@ -102,8 +102,8 @@ sequenceDiagram
 
 1. `robot_server` 收到 `CMD` 帧。
 2. 协议层完成 CRC 和 payload 解析。
-3. `CommandDispatcher` 将 `MOVE` 写入最新运动设定，将 `DISCRETE` 作为离散事件执行。
-4. `RosControlBridge` 以 10Hz 发布 `/cmd_vel`。
+3. `CommandDispatcher` 将 `MOVE` 写入最新运动设定，将 `stand/sit/stop` 与 `skill_invoke` 分发到 ROS skill bridge。
+4. `RosControlBridge` 以 10Hz 发布 `/cmd_vel`；`RosSkillBridge` 负责发 `/agent_skill/.../execute`。
 
 ### 映射
 
@@ -113,9 +113,9 @@ sequenceDiagram
 
 ### 离散命令处理
 
-- `stand`：转发为站立事件或服务调用占位
-- `sit`：转发为下蹲事件或服务调用占位
-- `stop`：立即清零 `vx / vy / yaw`
+- `stand`：默认转发 `do_action(action_id=3)`
+- `sit`：默认转发 `do_action(action_id=5)`
+- `stop`：立即清零 `vx / vy / yaw`，并转发 `do_action(action_id=6)`
 
 ## 4. 协议设计确认（字段级）
 
@@ -154,6 +154,18 @@ sequenceDiagram
 | stand | `0x10` |
 | sit | `0x11` |
 | stop | `0x12` |
+| skill_invoke | `0x20` |
+
+#### `skill_invoke` (`cmd_id = 0x20`)
+
+```text
+cmd_id:uint8 | service_id:uint8 | op:uint8 | flags:uint8 | arg_len:uint8 | args[arg_len]
+```
+
+一期当前已落地：
+
+- `service_id=0x01 do_action, op=0x01 execute, args=action_id:uint16`
+- `service_id=0x02 do_dog_behavior, op=0x01 execute, args=behavior_id:uint8`
 
 ### STATE Payload
 
@@ -179,7 +191,7 @@ sequenceDiagram
 
 ## 5. Command Queue 设计
 
-采用“单 inflight + latest move slot + discrete FIFO”。
+发送端（当前为 `mobile_sdk`）采用“单 inflight + latest move slot + discrete FIFO”。
 
 ### 内部结构
 
@@ -211,8 +223,8 @@ sequenceDiagram
 
 ### 接收端
 
-- CRC 正确且 payload 可解析后立即回 ACK
-- 服务端记录最近窗口内的 `seq`，重复包只回 ACK，不重复执行业务动作
+- CRC 正确、payload 可解析且命令被 server 接受进入本地处理链后回 ACK
+- 服务端记录最近窗口内的 `(seq, payload)` 指纹，重复包只回 ACK，不重复执行业务动作
 
 ### 时序状态机
 
@@ -260,4 +272,3 @@ IDLE
 7. Flutter SDK：`RobotClient` + queue + transport
 8. App 内图形化动作引擎
 9. 最后做端到端联调与真机参数校准
-

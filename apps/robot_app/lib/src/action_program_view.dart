@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:mobile_sdk/mobile_sdk.dart';
 
 import 'action_engine.dart';
 import 'action_models.dart';
@@ -64,7 +65,7 @@ class _ActionProgramViewState extends State<ActionProgramView> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.86),
+        color: Colors.white.withValues(alpha: 0.86),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: const Color(0xFFB8D3CC)),
         boxShadow: const <BoxShadow>[
@@ -212,6 +213,20 @@ class _ActionProgramViewState extends State<ActionProgramView> {
           label: '+ stop',
           onPressed: disabled ? null : () => _addStep(ActionStep.stop()),
         ),
+        _AddChip(
+          label: '+ do_action',
+          onPressed: disabled
+              ? null
+              : () => _addStep(ActionStep.doAction(actionId: 20593)),
+        ),
+        _AddChip(
+          label: '+ do_dog_behavior',
+          onPressed: disabled
+              ? null
+              : () => _addStep(
+                  ActionStep.doDogBehavior(behavior: DogBehavior.waveHand),
+                ),
+        ),
       ],
     );
   }
@@ -253,7 +268,9 @@ class _ActionProgramViewState extends State<ActionProgramView> {
     setState(() {
       _program.add(step);
     });
-    if (step.type == ActionCommandType.move) {
+    if (step.type == ActionCommandType.move ||
+        step.type == ActionCommandType.doAction ||
+        step.type == ActionCommandType.doDogBehavior) {
       await _editStep(_program.length - 1);
     }
   }
@@ -352,9 +369,9 @@ class _LinkStatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.14),
+        color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -386,9 +403,9 @@ class _EngineStatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.18),
+        color: color.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Text(
         label,
@@ -468,14 +485,14 @@ class _StepTile extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFFF5FAF8),
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: statusColor.withOpacity(0.35)),
+                border: Border.all(color: statusColor.withValues(alpha: 0.35)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: <Widget>[
                   CircleAvatar(
                     radius: 14,
-                    backgroundColor: statusColor.withOpacity(0.15),
+                    backgroundColor: statusColor.withValues(alpha: 0.15),
                     child: Text(
                       '${index + 1}',
                       style: TextStyle(
@@ -490,7 +507,10 @@ class _StepTile extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Row(
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: <Widget>[
                             Text(
                               step.title,
@@ -499,14 +519,12 @@ class _StepTile extends StatelessWidget {
                                 color: Color(0xFF173C38),
                               ),
                             ),
-                            const SizedBox(width: 8),
                             _StatusPill(
                               label: statusLabel,
                               color: statusColor,
                               icon: statusIcon,
                             ),
                             if ((progress?.attempts ?? 0) > 1) ...<Widget>[
-                              const SizedBox(width: 6),
                               Text(
                                 '第 ${progress!.attempts} 次尝试',
                                 style: const TextStyle(
@@ -594,7 +612,7 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.14),
+        color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(

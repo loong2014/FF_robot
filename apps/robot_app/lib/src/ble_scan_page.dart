@@ -147,11 +147,12 @@ class _BleScanPageState extends State<BleScanPage> {
                         isThreeLine: true,
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () async {
+                          final navigator = Navigator.of(context);
                           await _stopScan();
                           if (!mounted) {
                             return;
                           }
-                          Navigator.of(context).pop(device);
+                          navigator.pop(device);
                         },
                       );
                     },

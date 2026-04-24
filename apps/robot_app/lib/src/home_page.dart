@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:mobile_sdk/mobile_sdk.dart';
@@ -8,6 +9,7 @@ import 'action_models.dart';
 import 'action_program_view.dart';
 import 'ble_scan_page.dart';
 import 'mqtt_connect_dialog.dart';
+import 'quick_control_panel.dart';
 import 'tcp_connect_dialog.dart';
 
 class HomePage extends StatefulWidget {
@@ -22,16 +24,13 @@ class _HomePageState extends State<HomePage> {
   late final ActionEngine _engine = ActionEngine(_client);
   late final List<ActionStep> _initialProgram = <ActionStep>[
     ActionStep.stand(),
+    ActionStep.doDogBehavior(behavior: DogBehavior.waveHand),
     ActionStep.move(
       vx: 0.35,
       yaw: 0.15,
-      duration: const Duration(seconds: 2),
+      duration: const Duration(seconds: 1),
     ),
-    ActionStep.move(
-      vx: 0.2,
-      yaw: -0.2,
-      duration: const Duration(seconds: 2),
-    ),
+    ActionStep.doAction(actionId: 20593),
     ActionStep.sit(),
   ];
 
@@ -129,7 +128,9 @@ class _HomePageState extends State<HomePage> {
                 padding: const EdgeInsets.all(20),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    minHeight: constraints.maxHeight - 40,
+                    minHeight: constraints.hasBoundedHeight
+                        ? math.max(0, constraints.maxHeight - 40)
+                        : 0,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,6 +244,16 @@ class _HomePageState extends State<HomePage> {
                                   ],
                                 ),
                               ],
+                            ),
+                          ),
+                          _ControlCard(
+                            title: '快捷控制',
+                            child: QuickControlPanel(
+                              client: _client,
+                              isConnected: _connection.status ==
+                                  ConnectionStatus.connected,
+                              onRequireConnection: _promptConnectBle,
+                              onMessage: _showMessage,
                             ),
                           ),
                         ],

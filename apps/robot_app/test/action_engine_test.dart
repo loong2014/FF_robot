@@ -41,6 +41,19 @@ class _FakeRobotClient extends RobotClient {
     }
   }
 
+  @override
+  Future<void> doAction(int actionId, {bool requireAck = true}) async {
+    _record('doAction($actionId)', key: 'doAction');
+  }
+
+  @override
+  Future<void> doDogBehavior(
+    DogBehavior behavior, {
+    bool requireAck = true,
+  }) async {
+    _record('doDogBehavior(${behavior.displayLabel})', key: 'doDogBehavior');
+  }
+
   void _record(String call, {String? key}) {
     calls.add(call);
     final counterKey = key ?? call;
@@ -71,6 +84,8 @@ void main() {
 
       final program = <ActionStep>[
         ActionStep.stand(),
+        ActionStep.doDogBehavior(behavior: DogBehavior.waveHand),
+        ActionStep.doAction(actionId: 20593),
         ActionStep.sit(),
       ];
 
@@ -78,12 +93,25 @@ void main() {
       await sub.cancel();
 
       expect(engine.status, ActionEngineStatus.completed);
-      expect(client.calls, containsAllInOrder(<String>['stand', 'sit']));
+      expect(
+        client.calls,
+        containsAllInOrder(<String>[
+          'stand',
+          'doDogBehavior(wave_hand)',
+          'doAction(20593)',
+          'sit',
+        ]),
+      );
       final finalSnapshot = engine.currentProgress;
       expect(finalSnapshot.engineStatus, ActionEngineStatus.completed);
       expect(
         finalSnapshot.steps.map((s) => s.status).toList(),
-        <ActionStepStatus>[ActionStepStatus.done, ActionStepStatus.done],
+        <ActionStepStatus>[
+          ActionStepStatus.done,
+          ActionStepStatus.done,
+          ActionStepStatus.done,
+          ActionStepStatus.done,
+        ],
       );
 
       await engine.dispose();

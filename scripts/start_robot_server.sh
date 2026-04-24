@@ -90,6 +90,14 @@ for sys_site in /usr/lib/python3/dist-packages /usr/local/lib/python3/dist-packa
         EXTRA_PATH="${EXTRA_PATH}:${sys_site}"
     fi
 done
+for vendor_site in /opt/*/lib/python3/dist-packages; do
+    if [[ -d "$vendor_site" ]]; then
+        EXTRA_PATH="${EXTRA_PATH}:${vendor_site}"
+    fi
+done
+if [[ -n "${ROBOT_FACTORY_EXTRA_PYTHONPATH:-}" ]]; then
+    EXTRA_PATH="${EXTRA_PATH}:${ROBOT_FACTORY_EXTRA_PYTHONPATH}"
+fi
 export PYTHONPATH="${EXTRA_PATH}${PYTHONPATH:+:$PYTHONPATH}"
 
 # ---------------------------------------------------------------------------

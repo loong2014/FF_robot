@@ -7,5 +7,6 @@ void main() {
 
     expect(find.text('Robot OS Lite'), findsOneWidget);
     expect(find.text('机器狗控制台 / 图形化动作编排'), findsOneWidget);
+    expect(find.text('快捷控制'), findsOneWidget);
   });
 }

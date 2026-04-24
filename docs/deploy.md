@@ -63,6 +63,8 @@ pip install paho-mqtt
 
 `python3-dbus` / `python3-gi` 使用系统包提供；若在 venv 里启动，确保系统
 `dist-packages` 在 `PYTHONPATH` 中。推荐直接走 `scripts/start_robot_server.sh`。
+该脚本还会自动追加 `/opt/*/lib/python3/dist-packages`，以覆盖厂商 ROS Python
+包（例如 `agent_msgs`）不在标准路径里的机器狗环境。
 
 ## 4. 环境文件
 
@@ -168,7 +170,7 @@ ss -ltnp | grep 9000
 预期：
 
 - 连接不超时
-- 立即收到 ACK
+- 收到 ACK（表示 server 已接受命令进入本地处理链）
 - state notify 约 10Hz
 
 注意：当前 `robot_server` 走统一二进制协议；写入纯文本 `hello` 不会像旧的独立
@@ -212,5 +214,5 @@ python3 -c "import dbus; from gi.repository import GLib"
 ### `robot_server` 启动后 `import rospy` 失败
 
 确认是用 `scripts/start_robot_server.sh` 启动，而不是直接裸跑 `python3`。  
-这个脚本会自动 source `/opt/ros/noetic/setup.bash` 并把系统 `dist-packages`
-加入 `PYTHONPATH`。
+这个脚本会自动 source `/opt/ros/noetic/setup.bash`，并把系统 `dist-packages`
+以及 `/opt/*/lib/python3/dist-packages` 加入 `PYTHONPATH`。

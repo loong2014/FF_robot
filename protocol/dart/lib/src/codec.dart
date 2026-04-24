@@ -112,6 +112,19 @@ Uint8List encodeCommandPayload(RobotCommand command) {
     return payload.buffer.asUint8List();
   }
 
+  if (command is SkillInvokeCommand) {
+    final payload = BytesBuilder(copy: false)
+      ..add(<int>[
+        command.commandId.value,
+        command.serviceId.value,
+        command.operation.value,
+        command.requireAck ? 0x01 : 0x00,
+        command.args.length,
+      ])
+      ..add(command.args);
+    return payload.toBytes();
+  }
+
   return Uint8List.fromList(<int>[command.commandId.value]);
 }
 
@@ -130,6 +143,30 @@ RobotCommand parseCommandPayload(List<int> payload) {
       vx: data.getInt16(0, Endian.little) / kMoveScale,
       vy: data.getInt16(2, Endian.little) / kMoveScale,
       yaw: data.getInt16(4, Endian.little) / kAngleScale,
+    );
+  }
+
+  if (commandId == CommandId.skillInvoke) {
+    if (payload.length < 5) {
+      throw const ProtocolException(
+        'Skill invoke payload must be at least 5 bytes',
+      );
+    }
+    final serviceId = ServiceId.fromValue(payload[1]);
+    final operation = Operation.fromValue(payload[2]);
+    final flags = payload[3];
+    final argLength = payload[4];
+    final args = payload.sublist(5);
+    if (args.length != argLength) {
+      throw const ProtocolException(
+        'Skill invoke arg length does not match payload length',
+      );
+    }
+    return SkillInvokeCommand(
+      serviceId: serviceId,
+      operation: operation,
+      args: args,
+      requireAck: (flags & 0x01) != 0,
     );
   }
 

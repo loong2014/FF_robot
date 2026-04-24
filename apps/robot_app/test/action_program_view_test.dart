@@ -19,6 +19,15 @@ class _FakeRobotClient extends RobotClient {
 
   @override
   Future<void> move(double vx, double vy, double yaw) async {}
+
+  @override
+  Future<void> doAction(int actionId, {bool requireAck = true}) async {}
+
+  @override
+  Future<void> doDogBehavior(
+    DogBehavior behavior, {
+    bool requireAck = true,
+  }) async {}
 }
 
 void main() {
@@ -29,7 +38,8 @@ void main() {
     final engine = ActionEngine(client);
     final program = <ActionStep>[
       ActionStep.stand(),
-      ActionStep.sit(),
+      ActionStep.doDogBehavior(behavior: DogBehavior.waveHand),
+      ActionStep.doAction(actionId: 20593),
     ];
 
     await tester.pumpWidget(
@@ -47,7 +57,8 @@ void main() {
 
     expect(find.text('动作编排'), findsOneWidget);
     expect(find.text('站立 · stand'), findsOneWidget);
-    expect(find.text('坐下 · sit'), findsOneWidget);
+    expect(find.text('行为 · do_dog_behavior'), findsOneWidget);
+    expect(find.text('动作 · do_action'), findsOneWidget);
     expect(find.text('执行'), findsOneWidget);
     expect(find.text('暂停'), findsOneWidget);
     expect(find.text('停止'), findsOneWidget);

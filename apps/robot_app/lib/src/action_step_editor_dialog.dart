@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:mobile_sdk/mobile_sdk.dart';
 
 import 'action_models.dart';
 
@@ -29,7 +30,9 @@ class _ActionStepEditorDialogState extends State<_ActionStepEditorDialog> {
   late final TextEditingController _vy;
   late final TextEditingController _yaw;
   late final TextEditingController _durationMs;
+  late final TextEditingController _actionId;
   late final TextEditingController _retries;
+  late DogBehavior _selectedBehavior;
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   @override
@@ -41,9 +44,13 @@ class _ActionStepEditorDialogState extends State<_ActionStepEditorDialog> {
     _durationMs = TextEditingController(
       text: (widget.initial.duration?.inMilliseconds ?? 1000).toString(),
     );
+    _actionId = TextEditingController(
+      text: (widget.initial.actionId ?? 20593).toString(),
+    );
     _retries = TextEditingController(
       text: widget.initial.maxRetries.toString(),
     );
+    _selectedBehavior = widget.initial.behavior ?? DogBehavior.waveHand;
   }
 
   @override
@@ -52,6 +59,7 @@ class _ActionStepEditorDialogState extends State<_ActionStepEditorDialog> {
     _vy.dispose();
     _yaw.dispose();
     _durationMs.dispose();
+    _actionId.dispose();
     _retries.dispose();
     super.dispose();
   }
@@ -60,6 +68,8 @@ class _ActionStepEditorDialogState extends State<_ActionStepEditorDialog> {
   Widget build(BuildContext context) {
     final step = widget.initial;
     final isMove = step.type == ActionCommandType.move;
+    final isDoAction = step.type == ActionCommandType.doAction;
+    final isDoDogBehavior = step.type == ActionCommandType.doDogBehavior;
 
     return AlertDialog(
       title: Text('编辑动作 · ${step.title}'),
@@ -92,6 +102,41 @@ class _ActionStepEditorDialogState extends State<_ActionStepEditorDialog> {
                   isInteger: true,
                 ),
               ],
+              if (isDoAction)
+                _numberField(
+                  controller: _actionId,
+                  label: 'action_id',
+                  allowNegative: false,
+                  isInteger: true,
+                ),
+              if (isDoDogBehavior)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: DropdownButtonFormField<DogBehavior>(
+                    initialValue: _selectedBehavior,
+                    decoration: const InputDecoration(
+                      labelText: 'behavior',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: DogBehavior.values
+                        .map(
+                          (behavior) => DropdownMenuItem<DogBehavior>(
+                            value: behavior,
+                            child: Text(behavior.displayLabel),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setState(() {
+                        _selectedBehavior = value;
+                      });
+                    },
+                  ),
+                ),
               _numberField(
                 controller: _retries,
                 label: '失败重试次数 maxRetries',
@@ -137,6 +182,14 @@ class _ActionStepEditorDialogState extends State<_ActionStepEditorDialog> {
         vy: vy,
         yaw: yaw,
         duration: Duration(milliseconds: durationMs),
+        maxRetries: retries,
+      );
+    } else if (step.type == ActionCommandType.doAction) {
+      final actionId = int.tryParse(_actionId.text.trim()) ?? step.actionId ?? 0;
+      updated = step.copyWith(actionId: actionId, maxRetries: retries);
+    } else if (step.type == ActionCommandType.doDogBehavior) {
+      updated = step.copyWith(
+        behavior: _selectedBehavior,
         maxRetries: retries,
       );
     } else {

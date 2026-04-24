@@ -1,5 +1,4 @@
 import 'package:mobile_sdk/mobile_sdk.dart';
-import 'package:robot_protocol/robot_protocol.dart';
 import 'package:test/test.dart';
 
 void main() {

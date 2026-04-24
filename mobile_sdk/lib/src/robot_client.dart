@@ -190,6 +190,30 @@ class RobotClient {
     await _enqueueCommand(const DiscreteCommand(CommandId.stop));
   }
 
+  Future<void> doAction(
+    int actionId, {
+    bool requireAck = true,
+  }) async {
+    await _enqueueCommand(
+      SkillInvokeCommand.doAction(
+        actionId: actionId,
+        requireAck: requireAck,
+      ),
+    );
+  }
+
+  Future<void> doDogBehavior(
+    DogBehavior behavior, {
+    bool requireAck = true,
+  }) async {
+    await _enqueueCommand(
+      SkillInvokeCommand.doDogBehavior(
+        behavior: behavior,
+        requireAck: requireAck,
+      ),
+    );
+  }
+
   Future<void> _enqueueCommand(RobotCommand command) async {
     final seq = _nextSequence();
     final frameBytes = encodeFrame(buildCommandFrame(command, seq));

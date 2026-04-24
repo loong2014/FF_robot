@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from threading import Lock
 from typing import Tuple, Union
 
-from robot_protocol import CommandId, DiscreteCommand, MoveCommand, RobotState
+from robot_protocol import CommandId, DiscreteCommand, MoveCommand, RobotState, SkillInvokeCommand
 
 
 @dataclass(frozen=True)
@@ -86,6 +86,9 @@ class StateStore:
                 fault_codes=tuple(codes),
             )
 
-    def observe_command(self, command: Union[MoveCommand, DiscreteCommand]) -> None:
+    def observe_command(
+        self,
+        command: Union[MoveCommand, DiscreteCommand, SkillInvokeCommand],
+    ) -> None:
         if isinstance(command, DiscreteCommand) and command.command_id == CommandId.STOP:
             self.set_attitude(roll=self._state.roll, pitch=self._state.pitch, yaw=self._state.yaw)

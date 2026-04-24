@@ -3,21 +3,22 @@
 > 生成时间：2026-04-21  
 > 依据：`prd.md`、`brd.md`、`docs/cursor_opus_development_roadmap.md`，以及对 `protocol/` / `robot_server/` / `mobile_sdk/` / `apps/robot_app/` 的并行 explore 盘点。  
 > 规则：本文档是所有后续里程碑的上下文锚点；每个里程碑结束时需要回写完成度与剩余风险。
+> 2026-04-23 更新：根据用户反馈，BLE 已完成客户端真实搜索 / 连接 / 数据交互验证；以下与 BLE 基础连通性相关的结论已同步收敛，本轮未做新的真机复测。
 
 ---
 
 ## TL;DR（一眼看结论）
 
 - **协议层（`protocol`）**：帧格式 / CRC / stream decoder / Python ↔ Dart 对齐 **基本到位**。~~主要风险在 **Python 3.8 兼容性**（`@dataclass(slots=True)`、`pyproject.toml requires-python = ">=3.11"`）~~ ✅ 2026-04-21 完成 Python 3.8 兼容性对齐（见 P0-1）；Dart 侧测试覆盖不足的风险仍在。
-- **机器人端（`robot_server`）**：骨架齐全（BLE/TCP/MQTT/ROS/StateStore），但 **`CommandQueue` 类存在却未被运行时使用**，等于「未 ACK 阻塞重传」语义在服务端**没有生效**；`StateStore` 也**没有真实 ROS 状态采集**；Python 3.8 兼容性整体破坏；**无部署脚手架**（systemd / `.env.example` / 依赖齐备性）。
-- **SDK（`mobile_sdk`）**：`RobotClient` API + 命令队列 + ACK/重试 + TCP Transport 可用；但 **BLE 与 MQTT Transport 都是 `UnsupportedError` 占位**；**没有统一连接状态模型**，也**没有 BLE > TCP > MQTT 自动切换**；存在 `StreamController` 未关闭、过度 export 让 App 可绕过 `RobotClient` 等隐患。
-- **App（`apps/robot_app`）**：是**单页演示级**壳层，`RobotClient` 边界守得住，但**缺设备搜索 / 绑定 / 参数配置 / 运动控制 UI / 原生工程（android / ios）**；动作序列是**写死的 `_demoProgram`**，谈不上"图形化编程"。
+- **机器人端（`robot_server`）**：主链可运行（BLE/TCP/MQTT/ROS/StateStore/部署脚手架均已落地）；ACK 语义已收口为“成功接受 `CMD` 进入本地处理链后回 ACK”，重复包按 `seq + payload` 去重，server 侧未接入的 `CommandQueue` 已删除。
+- **SDK（`mobile_sdk`）**：`RobotClient` API + 命令队列 + ACK/重试 + BLE/TCP/MQTT transport + 连接状态已经可用，其中 BLE 已完成客户端真实搜索 / 连接 / 数据交互验证；主要缺口是**没有 BLE > TCP > MQTT 自动切换**，且 export 边界仍偏宽。
+- **App（`apps/robot_app`）**：已具备 **BLE 扫描 / 连接**、TCP/MQTT 参数配置、状态看板、首页快捷动作直控与动作编排；仍是演示级控制台，缺设备绑定、配置持久化与正式运动控制 UI。
 
 **最高优先级的三件事**（建议按顺序推进，与路线图 Milestone 1/2 对齐）：
 
-1. **P0 — 统一 Python 目标版本**：选定 3.8（契合 Noetic）或 3.10+（契合当前源码），并把 `pyproject.toml` / `AGENTS.md` / 源码三者对齐；若走 3.8，需要消除 `slots=True` 与 PEP 585 / PEP 604 使用。
-2. **P0 — 打通 BLE 端到端闭环**：服务端接 BlueZ GATT（含 MTU / ACK 正确性复核）、SDK 选型真实 Flutter BLE 插件、App 补 `android/` `ios/` 与权限。
-3. **P0 — 把 `CommandQueue` 接入 `RobotRuntime` 出站路径（或明确只 SDK 侧使用）**：现状相当于"文档写了重传，实现没生效"。
+1. **P0/P1 — 把 App 从演示控制台推进到可交付控制产品**：补设备管理、配置持久化、手动控制 UI 与更完整的错误恢复。
+2. **P1/P2 — 把已验证的 BLE 基础链路沉淀为稳定性回归能力**：补长时压测、多终端回归和 smoke / CI，而不是重复证明能扫到和连上。
+3. **P0/P1 — 收敛 SDK / 协议契约**：补 `mobile_sdk` export 边界、Python ↔ Dart golden vectors 与更多 runtime 回归，减少后续多 transport 漂移。
 
 ---
 
@@ -28,19 +29,19 @@
 | 子能力 | `robot_server` | `mobile_sdk` | `apps/robot_app` | `protocol` | 备注 |
 |---|---|---|---|---|---|
 | 统一二进制协议（帧 + CRC + stream decoder） | ✅（`robot_protocol` 接入） | ✅（`robot_protocol` 接入） | 无需关心 | ✅ | Python ↔ Dart 对齐度高 |
-| BLE 传输 | 🟡 骨架（BlueZ GATT 已写，MTU / ACK 语义需复核） | ❌ stub（`UnsupportedError`） | ❌（无 `android/` `ios/`、无权限配置） | — | 端到端未联调 |
+| BLE 传输 | ✅（BlueZ GATT + GLib backend 已落地） | ✅（`flutter_blue_plus` 真实 transport） | ✅（已完成客户端真实扫描 / 连接 / 数据交互验证） | — | 基础链路已闭环，剩余是稳定性压测与多终端回归 |
 | TCP 传输 | 🟡（asyncio server + 广播 OK，断连语义简） | 🟡（`Socket` + stream decoder，无超时 / 无统一断开事件） | 🟡（有"Connect TCP"按钮，无参数配置 UI） | — | 跑得起来，但未产品化 |
-| MQTT 传输 | 🟡（paho 订阅 `control`，发 `state`/`event`，无鉴权/TLS） | ❌ stub（`UnsupportedError`） | 🟡（有按钮，未用 `MqttConnectionOptions`） | — | 连通性逻辑薄 |
+| MQTT 传输 | 🟡（Router、鉴权、TLS、事件分流已实现） | 🟡（真实 transport 已实现） | 🟡（已接入参数配置与连接入口） | — | 仍依赖真实 broker 与 smoke / CI 回归 |
 | ROS1 `/cmd_vel`（10Hz） | 🟡（`RosControlBridge` 有，独立线程） | 无需关心 | 无需关心 | — | 无 mock 节点 / rostest |
 | ROS1 状态采集（电池 / IMU / odom / 诊断） | ✅（`RosStateBridge`，topic + msg_type 可配置；默认 sensor_msgs/nav_msgs/diagnostic_msgs；battery_low + fault event） | 无需关心 | 无需关心 | — | 单测 15 条；真机 rostopic pub 验证步骤见 `docs/ros_state_integration.md` |
 | StateStore & 10Hz 状态推送 | ✅（`RobotState` + `RobotStateExtras`，真实电量/IMU/odom/故障填入；BLE/TCP/MQTT 三路广播协议 STATE） | 🟡（`stateStream` OK） | 🟡（展示 battery/roll/pitch/yaw） | — | extras（odom/fault）仅通过 MQTT event 下发 |
-| 命令队列（move 覆盖 / discrete FIFO / 未 ACK 阻塞重传） | ❌ **类存在但未被运行时使用** | 🟡（`CommandQueue` 已用于 RobotClient，重试 3 次 + 100ms） | 无需关心 | — | 服务端语义未生效 |
+| 命令队列（move 覆盖 / discrete FIFO / 未 ACK 阻塞重传） | —（server 不维护独立发送队列；负责 ACK + `seq/payload` 去重） | 🟡（`CommandQueue` 已用于 RobotClient，重试 3 次 + 100ms） | 无需关心 | — | 发送端队列当前只在 SDK 侧实现 |
 | 自动切换传输（BLE > TCP > MQTT） | 无需关心 | ❌ | ❌ | — | 完全未实现 |
-| 统一连接状态模型（transport + state + error） | — | ❌（只有 `isConnected` + 裸 `Object` error） | ❌（仅 SnackBar 文案） | — | 需 Milestone 3 设计 |
-| 设备搜索 / 绑定 | — | — | ❌ | — | App 侧无扫描流程 |
-| 基础运动控制 UI（摇杆 / 方向） | — | — | ❌ | — | 只有 Demo 序列 |
+| 统一连接状态模型（transport + state + error） | — | 🟡（`RobotConnectionState` + `connectionState` 已有） | 🟡（已接连接状态展示） | — | 自动切换 / 更细错误模型仍待补 |
+| 设备搜索 / 绑定 | — | — | 🟡 | — | 已有 BLE 扫描流程，绑定与持久化仍待补 |
+| 基础运动控制 UI（摇杆 / 方向） | — | — | 🟡 | — | 已有首页快捷动作直控，仍缺摇杆 / 连续运动控制 UI |
 | 动作编排（Action Engine） | — | — | 🟡（顺序 / 暂停 / 停止 OK；序列硬编码；无错误反馈） | — | 用户不能编辑序列 |
-| 启动 / 部署 | ❌（无 systemd / `.env.example` / 依赖未声明 `robot-protocol`） | — | ❌（无 `android/` `ios/`） | — | 无法直接交给测试同学 |
+| 启动 / 部署 | ✅（`.env.example` + 启动脚本 + systemd 示例已补齐） | — | 🟡（`android/` / `ios/` 已补齐） | — | 仍缺更完整交付流程与自动化验证 |
 
 图例：✅ 可用 / 🟡 部分或 stub / ❌ 缺失。
 
@@ -56,8 +57,8 @@
 | # | 条目 | 模块 | 规模 | 真机 |
 |---|---|---|---|---|
 | P0-1 | **统一 Python 目标版本**：在 `AGENTS.md`、`protocol/python/pyproject.toml`、`robot_server/pyproject.toml` 三处对齐。若按 AGENTS 保留 Python 3.8：消除所有 `@dataclass(slots=True)`、`X \| Y` 运行时、`list[int]`/`dict[str, Any]` 运行时泛型（见下面清单）；若改为 3.10+：更新 AGENTS 并记录 Noetic 部署用 pyenv / conda。 ✅ 2026-04-21 完成：选定 Python 3.8；清除全部 `@dataclass(slots=True)`；所有 PEP 604 / PEP 585 写法改回 `typing.Optional/Union/List/Dict/Deque/Set` 并保留 `from __future__ import annotations`；两个 `pyproject.toml` 的 `requires-python` 改为 `>=3.8`；README 补充说明；Python 3.13 下 `protocol/python` 5 个单测 + `robot_server` 3 个单测全部通过；`ast.parse(..., feature_version=(3,8))` 全量 27 个 `.py` 文件通过。 | `protocol` + `robot_server` | L | 🖧 |
-| P0-2 | **`CommandQueue` 接入 `RobotRuntime`**（或明确删除 server 侧类并更新文档）：确保"未 ACK 阻塞"/"discrete FIFO"/"move 覆盖"在服务端也**真正生效**，否则 Retrye/ACK 是"文档谎言"。 | `robot_server` | M | 🖧 |
-| P0-3 | **BLE 端到端联调**：BlueZ GATT 权限 / MTU 协商策略 / ACK 走 state 特征的客户端契约文档化；Flutter 侧选型真实插件（建议 `flutter_blue_plus`）并实现 `BleTransport.connect/send + stream decoder`；App 补 `android/` `ios/` 工程与 BLE 权限。 🟡 2026-04-21（本地闭环完成，真机待验）：`robot_server` 新增 BlueZ 广告、MTU 分片、按 device path 区分 session 与 BLE 单测；`mobile_sdk` 接入 `flutter_blue_plus 2.2.1`、实现 `BleTransport` 与 `RobotClient.scanBLE` 并新增 fake-platform 测试；`apps/robot_app` 接入 BLE 扫描页。Milestone 2.2 小修补：`CommandCharacteristic.WriteValue` fire-and-forget task 增加 `add_done_callback` 记录 handler 异常（避免 ACK 回调丢失被吞）。新增 `docs/ble_integration.md`：三端启动依赖、env 变量、Stage A~D 联调步骤、排查清单、与 TCP/MQTT 的交叉点。Python 单测（`protocol`: 5 / `robot_server`: 5）与 Flutter 单测（`mobile_sdk`: 3 / `robot_app`: 1）全部通过。真机 BlueZ（Ubuntu 20.04） + Android / iOS 扫描 / 连接 / 10Hz 状态回传仍待按 Stage A/B/C 实机验证。<br>🟢 2026-04-22 **机器狗端 BLE 跑通**（aarch64 Ubuntu 20.04 + Python 3.8）：dbus-next / dbus-fast asyncio 后端在该平台有已知问题（客户端发 method call 后被 dbus-daemon 触发 NameLost，reply 永不到 future，`bus.introspect()` 超时）；新增 `bluez_gatt_glib.BlueZGATTTransportGLib`（dbus-python + GLib MainLoop 独立线程 + `asyncio ↔ GLib` 双向桥接 + dbus-python 异步 API 的 RegisterApplication/RegisterAdvertisement/Unregister* reply_handler→asyncio.Future），以及 `transports/ble/create_ble_transport` 工厂按 `ROBOT_BLE_BACKEND=auto|glib|dbus_next` 路由（auto 默认真机优先 glib）。`server_run.sh` 自动把 `/usr/lib/python3/dist-packages` 并入 `PYTHONPATH`（复用系统 `python3-dbus`/`python3-gi`，无需重建 venv）；`.env.example` 追加 `ROBOT_BLE_BACKEND`；`main.py` 增加 `logging.basicConfig`（`ROBOT_LOG_LEVEL`）。新增 11 个 `test_ble_backend_factory.py` 单测（factory dispatch / option 解析），`robot_server` 46 个单测全通过。机器狗实测：`BLE GATT ready (glib backend)`、`LEAdvertisingManager1.ActiveInstances=1`、`Alias=RobotOSLite`，SIGTERM 后 `ActiveInstances=0` 干净退出；厂商 `teleop_robot.service` 已先禁用避免 BLE 冲突。**手机 nRF Connect 扫描 / 连接 / 写 CMD / 收 STATE 通知**仍待用户手动完成，SDK 侧 `BleTransport` 与 App 侧扫描页已就绪。 | `robot_server` + `mobile_sdk` + `apps/robot_app` | L | 🖧 |
+| P0-2 | **ACK / CommandQueue 语义收口**：明确 server 不维护独立发送队列，删除未接入的 `runtime/command_queue.py`；`RobotControlService` 改为“解析成功 + 本地处理链接受成功后 ACK”，重复包按 `seq + payload` 去重。 ✅ 2026-04-24 完成（见 Milestone 10） | `robot_server` | M | 🖧 |
+| P0-3 | **BLE 端到端联调**：BlueZ GATT 权限 / MTU 协商策略 / ACK 走 state 特征的客户端契约文档化；Flutter 侧选型真实插件并实现 `BleTransport.connect/send + stream decoder`；App 补原生工程与 BLE 权限。 🟢 2026-04-21/22：服务端 BlueZ backend、SDK `BleTransport`、App 扫描页与原生权限均已落地。 🟢 2026-04-23（用户反馈，本轮未复测）：客户端已可搜索、连接机器狗 BLE 服务，并进行数据交互，基础连通性闭环完成。剩余主要是长时稳定性、10Hz STATE 压测、多终端回归和 smoke 自动化。 | `robot_server` + `mobile_sdk` + `apps/robot_app` | L | 🖧 |
 | P0-4 | **App 补原生工程**：`flutter create .` 模板生成 `android/` / `ios/`，加入 BLE / 网络权限，Info.plist 的 `NSBluetoothAlwaysUsageDescription` 与 Android `BLUETOOTH_SCAN/CONNECT` 等。 ✅ 2026-04-21 完成：已生成 `android/` 与 `ios/` 工程，补齐 Android BLE 权限与 iOS 蓝牙用途说明，`Podfile` 平台版本设为 iOS 12.0。 | `apps/robot_app` | M | 🖧 |
 | P0-5 | **设备管理 UI**（搜索 / 选择 / 绑定 / 连接状态）：至少支持 BLE 扫描列表 + 记住最近设备；TCP / MQTT 加参数配置屏（host/port/broker/device-id），替换掉当前硬编码 / 缺省值。 🟡 2026-04-21 已完成最小 BLE 扫描列表与设备选择回连；最近设备记忆、TCP/MQTT 参数配置、结构化连接状态仍待继续。 | `apps/robot_app` | L | 🖧 |
 | P0-6 | **收敛 SDK 对外 export**：`mobile_sdk.dart` 只 export `RobotClient` + 配置模型 + 必要类型；`BleTransport`/`TcpTransport`/`MqttTransport`/`CommandQueue` 改为内部实现，避免 App 绕过 `RobotClient`。 | `mobile_sdk` | S | — |
@@ -79,7 +80,7 @@
 | P1-9 | **`RobotClient` + mock transport 测试**：ACK 驱动 `_pumpQueue`、重试耗尽、discrete 与 move 交织、订阅泄漏检查。 | `mobile_sdk` | M | 🧪 |
 | P1-10 | **Action Engine 产品化**（Milestone 7 前置）：序列可编辑（增 / 删 / 改 / 拖拽排序）、本地持久化、步骤级失败 / 重试反馈、运行结束回到 `idle`。 🟡 2026-04-22 完成大部分（Milestone 7）：`ActionStep` 扩展 id/maxRetries/copyWith/title/summary；`ActionEngine` 引入 `ActionProgress` + 步骤级状态机（pending/running/done/failed/skipped）+ per-step 重试 + 可注入 sleep/now；新增 `ActionProgramView`（ReorderableListView + 拖拽 handle + Dismissible 删除 + 参数弹窗）与 `ActionStepEditorDialog`（vx/vy/yaw/duration/retries 校验）；`HomePage` 替换硬编码 `_demoProgram` 为可编辑视图；新增 5 个 `action_engine_test.dart`（顺序/重试/失败跳过/暂停/停止）+ 2 个 `action_program_view_test.dart`（初始列表/空态）；`apps/robot_app` 9/9 单测通过。**本地持久化（SharedPreferences）未纳入本轮**，运行结束自动回到 idle 按语义靠 `completed/stopped` 展示（UI 上暂未主动转回 idle）。 | `apps/robot_app` | L | — |
 | P1-11 | **App 订阅 `RobotClient.errors`**：全局错误条、loading、重试入口；告别裸 SnackBar。 | `apps/robot_app` | M | — |
-| P1-12 | **主控制面**（摇杆 / 方向键 / 速度条 + stand/sit/stop 三大按钮），全部走 `RobotClient`。 | `apps/robot_app` | L | — |
+| P1-12 | **主控制面**（摇杆 / 方向键 / 速度条 + stand/sit/stop 三大按钮），全部走 `RobotClient`。 🟡 2026-04-24 已补首页快捷动作直控（stand/sit/stop + 常用 dog behavior），仍缺摇杆 / 连续运动控制面。 | `apps/robot_app` | L | — |
 | P1-13 | **protocol STATE battery clamp 统一**：Python `& 0xFF` vs Dart `clamp(0,100)` 任选其一并文档化；明确 pitch/yaw 字段类型约定。 | `protocol` | S | — |
 | P1-14 | **Dart 协议测试补齐**：STATE、ACK、DISCRETE、`StreamFrameDecoder` 粘包 / CRC 错误恢复。 | `protocol` | M | 🧪 |
 
@@ -144,11 +145,10 @@
 
 1. **Python 版本对齐**（P0-1）—— 决定 Noetic 上能否 `import`。
 2. **`robot_server` 依赖声明齐全 + `.env.example` + systemd**（P0-7）—— 决定能不能交付部署。
-3. **`CommandQueue` 真正接入运行时**（P0-2）—— 决定"未 ACK 阻塞重传"是否真的在机器人端生效。
-4. **BLE 联调**（P0-3 + P0-4）—— BlueZ 权限、MTU、GATT 注册失败的排错。
-5. ~~**ROS 真实状态采集**（P1-6）—— 现在 battery / 姿态都是常量，真机上等于假状态。~~ ✅ 2026-04-21 完成，见 Milestone 6 条目；真机仍需 rostopic pub 验证。
-6. **MQTT 鉴权 / TLS**（P1-5）—— 真机长期上云最起码的安全面。
-7. **原生权限配置**（P0-4）—— 没有 `android/` `ios/`，Flutter App 真机装不上。
+3. **BLE 联调**（P0-3 + P0-4）—— BlueZ 权限、MTU、GATT 注册失败的排错。
+4. ~~**ROS 真实状态采集**（P1-6）—— 现在 battery / 姿态都是常量，真机上等于假状态。~~ ✅ 2026-04-21 完成，见 Milestone 6 条目；真机仍需 rostopic pub 验证。
+5. **MQTT 鉴权 / TLS**（P1-5）—— 真机长期上云最起码的安全面。
+6. **原生权限配置**（P0-4）—— 没有 `android/` `ios/`，Flutter App 真机装不上。
 
 ---
 
@@ -159,9 +159,14 @@
   - `.env.example`：头部新增「默认模式：BLE-only」段落；TCP 段默认值改为 `false` 并加注「调试旁路」说明；MQTT 段保留默认 `false` 并标注「上云 / 多路观测时再启用」
   - `robot_server/README.md`：新增「默认链路：BLE-only」小节，列出 `python3 -m robot_server` 的默认行为（BLE=on / TCP=off / MQTT=off / ROS 按部署决定）
   - 验证：`build_transports(load_config_from_env())` 默认仅返回 `['ble']`；`robot_server` 35/35 单测通过；`ReadLints` 无告警
-  - 剩余：① TCP/MQTT transport 代码、单测、文档均保留，随环境变量可重开；② BLE 真机 Stage A/B/C 验证仍未执行（属于 P0-3 未完成部分）；③ 未顺手做 P0-2（`CommandQueue` 接入 runtime）
+  - 剩余：① TCP/MQTT transport 代码、单测、文档均保留，随环境变量可重开；② BLE 基础功能已联通，但长时压测与多终端回归仍未系统执行
+- ✅ **Milestone 10 / ACK 语义收口**（2026-04-24）：
+  - `robot_server/robot_server/runtime/control_service.py`：`CMD` 改为先 parse，再 `apply_command()` / `observe_command()`，成功后才回 ACK；解析失败或 bridge 抛错不回 ACK；重复包从纯 `seq` 升级为 `seq + payload` 指纹窗口
+  - 删除 `robot_server/robot_server/runtime/command_queue.py` 与 `robot_server/tests/test_command_queue.py`；`robot_server/runtime/__init__.py` 和包根 `__init__.py` 不再导出 `CommandQueue` / `QueuedCommand`
+  - 新增 `robot_server/tests/test_control_service.py`：覆盖成功 ACK、重复包只 ACK 不重执、同 `seq` 不同 payload 视为新命令、parse failure 不 ACK、bridge failure 不 ACK 且重试不被误判重复
+  - 文档同步：根 `README.md`、`robot_server/README.md`、`docs/phase0_design.md`、`docs/ble_ros_sdk_execution_plan.md`、`docs/deploy.md`
 - ✅ **Milestone 1 / Python 3.8 基座对齐**（见 P0-1）
-- ✅ **Milestone 2.2 / BLE 端到端**（见 P0-3，真机验证待补）
+- ✅ **Milestone 2.2 / BLE 端到端**（见 P0-3，客户端基础链路已验，稳定性回归待补）
 - ✅ **Milestone 3 / SDK 统一连接管理**（`RobotConnectionState` + `connectionState` Stream + `switchTransport` + 默认无重连策略，测试覆盖优先级/失败/切换/BLE 保留，见 `mobile_sdk/test/robot_client_connection_test.dart`）
 - ✅ **Milestone 5 / MQTT 全链路**（2026-04-21）：
   - `robot_server/robot_server/config.py`：`MQTTConfig` 新增 username/password/client_id/keepalive/tls/reconnect_min_delay/reconnect_max_delay；`__post_init__` 校验 robot_id（禁止 `/ + #`）与 qos（0/1/2）；`load_config_from_env` 补全新增字段
@@ -205,7 +210,7 @@
     - `.env` 仍是明文存凭证，生产需接入密钥管理（KMS / Vault / `LoadCredential=`）
     - 无主动健康探针（liveness endpoint），systemd 下仅靠 `Restart=on-failure`
     - MQTT TLS 证书签发流程仓库不提供
-    - BLE 真机回归（Stage A/B/C）与 10Hz STATE 连续压测尚未执行
+    - BLE 已完成功能性联调；10Hz STATE 连续压测、多终端回归与 smoke 自动化尚未执行
     - `scripts/*_smoke.py` 未集成到 CI（MQTT 需要 ephemeral broker）
 - ✅ **Milestone 4 / TCP 全链路**（2026-04-21）：
   - `robot_server/transports/tcp/server.py`：加日志、session_id 单调后缀、send 失败自动剔除 client、stop 幂等关闭
@@ -218,21 +223,11 @@
   - `apps/robot_app/home_page.dart`：订阅 `RobotClient.connectionState` + `errors` 统一展示，保留上次 TCP 配置，新增 Disconnect 按钮
   - 测试：`robot_server/tests/test_tcp_transport.py`（3 test）+ `mobile_sdk/test/tcp_transport_test.dart`（4 test），全通过
 
-## 5. 推荐下一步（按路线图）
+## 5. 推荐下一步（当前状态）
 
-**Milestone 1：环境与基座对齐（Python 3.8 / ROS1 Noetic）**  
-即逐条落实 P0-1 + P0-7。建议 prompt 直接用路线图第 4 节 Milestone 1 的模板，加一句"按 `docs/backlog.md` P0-1 清单修"。
-
-**Milestone 1 完成后再决定**：
-
-- 若机器真能跑起来 → 直接进 **Milestone 2：BLE 端到端闭环**（P0-2 + P0-3 + P0-4 + P0-5 + P0-6 一轮打包）。
-- 若 BlueZ 真机短期没保障 → 先做 **Milestone 3：SDK 统一连接管理（P1-1 + P1-2）**，为后续所有 transport 打底，然后回头做 BLE。
-
-**Milestone 5（MQTT 全链路）完成后的推荐下一步**：
-
-1. **P0-2 `CommandQueue` 接入运行时**：BLE/TCP/MQTT 三条路径的 ACK 都已打通，但 server 侧的 `CommandQueue` 仍未接入，对端丢 ACK 时重传语义只在 SDK 侧生效。
-2. **Milestone 6 / ROS 真实状态采集**（P1-6）：把电池 / IMU / odom 填到 `StateStore`，让 MQTT/TCP/BLE 广播的 STATE 不再是常量。
-3. **P0-5 / P1-11 结构化连接状态 & 配置记忆**：把 `_lastTcpOptions` / `_lastMqttOptions` 持久化（SharedPreferences），在 UI 上加全局错误条复用 `RobotClient.errors`。
-4. **CI / Smoke 集成**：考虑在 CI 中用 mosquitto ephemeral container 跑 `scripts/mqtt_smoke.py`，防止 MQTT 路径回归。
+1. **P0-5 / P1-11 / P1-12 App 产品化**：补设备绑定、配置持久化、全局错误条和正式运动控制 UI，让 App 从演示控制台往可交付产品收敛。
+2. **BLE 稳定性回归**：基础搜索 / 连接 / 数据交互已验证，后续若需要继续投入，重点应转向长时压测、10Hz STATE 连续运行、重连场景和多终端覆盖。
+3. **P0-8 / P1-8 / P1-9 协议与运行时回归**：补 Python ↔ Dart golden vectors、`RobotRuntime` 集成单测和 `RobotClient` mock transport 测试，继续压实协议契约。
+4. **CI / Smoke 集成**：优先把 MQTT/BLE 相关 smoke 验证沉淀成自动化，避免只靠手工联调守质量。
 
 > 每个里程碑结束时，请在本文件对应条目后面追加：`✅ 完成 / 失败 / 推迟 + 一句话结论 + PR/commit 引用`，形成递进式收敛。

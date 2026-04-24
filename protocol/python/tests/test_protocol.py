@@ -6,8 +6,10 @@ from robot_protocol import (
     CommandId,
     CrcMismatchError,
     DiscreteCommand,
+    DogBehavior,
     MoveCommand,
     RobotState,
+    SkillInvokeCommand,
     StreamDecoder,
     build_ack_frame,
     build_command_frame,
@@ -49,6 +51,31 @@ class ProtocolTests(unittest.TestCase):
         frame = build_ack_frame(42)
         decoded = decode_frame(encode_frame(frame))
         self.assertEqual(parse_ack_payload(decoded.payload), 42)
+
+    def test_skill_invoke_do_action_round_trip(self) -> None:
+        command = SkillInvokeCommand.do_action(action_id=20524)
+        frame = build_command_frame(seq=8, command=command)
+        decoded = decode_frame(encode_frame(frame))
+        parsed = parse_command_payload(decoded.payload)
+
+        self.assertIsInstance(parsed, SkillInvokeCommand)
+        assert isinstance(parsed, SkillInvokeCommand)
+        self.assertEqual(parsed.action_id, 20524)
+        self.assertTrue(parsed.require_ack)
+
+    def test_skill_invoke_do_dog_behavior_round_trip(self) -> None:
+        command = SkillInvokeCommand.do_dog_behavior(
+            behavior_id=DogBehavior.WAVE_HAND,
+            require_ack=False,
+        )
+        frame = build_command_frame(seq=9, command=command)
+        decoded = decode_frame(encode_frame(frame))
+        parsed = parse_command_payload(decoded.payload)
+
+        self.assertIsInstance(parsed, SkillInvokeCommand)
+        assert isinstance(parsed, SkillInvokeCommand)
+        self.assertEqual(parsed.behavior_id, DogBehavior.WAVE_HAND)
+        self.assertFalse(parsed.require_ack)
 
     def test_decoder_handles_partial_and_sticky_frames(self) -> None:
         move = encode_frame(build_command_frame(seq=1, command=MoveCommand(vx=0.1, vy=0.0, yaw=0.2)))

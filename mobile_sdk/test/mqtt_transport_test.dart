@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_sdk/mobile_sdk.dart';
-import 'package:mobile_sdk/src/transports/mqtt_transport.dart';
 
 void main() {
   group('MqttTransport', () {
