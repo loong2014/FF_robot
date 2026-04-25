@@ -1,217 +1,465 @@
-你是一个资深机器人系统架构师，精通 ROS1 Noetic、Flutter SDK、BLE（BlueZ）、TCP 网络通信、MQTT，以及分布式通信系统设计。
+# Robot OS Lite PRD
 
-请设计并实现一个机器狗控制系统（Robot OS Lite）。
+> 更新时间：2026-04-25
+> 优先级参考：`brd.md` > 本文 > `docs/backlog.md` > 路线图文档 > README
+> 文档定位：定义当前产品范围、真实完成度、下一阶段研发要求与建议排期
 
-系统包含：
-- Flutter App（主应用 + 图形化编程）
-- Ubuntu 机器人端（ROS1 Noetic）
-- BLE（核心实现）
-- TCP（局域网/USB网络，框架）
-- MQTT（云端，框架 + Router）
-- 统一二进制协议
+## 1. 产品概述
 
-================================================
-【⚠️ 强制执行流程】
-================================================
+`Robot OS Lite` 是一个面向机器狗控制的 monorepo，覆盖：
 
-必须严格按三阶段执行：
+- Flutter App：`apps/robot_app`
+- Flutter / Dart SDK：`mobile_sdk`
+- Ubuntu + ROS1 Noetic 机器人端：`robot_server`
+- Python / Dart 共享协议：`protocol`
 
-------------------------------------------------
-【PHASE 0 - PLAN（必须先做）】
-------------------------------------------------
+当前系统已经具备协议层、机器人端主运行时、Flutter SDK 和演示级控制 App，工作重点已从“从零搭架构”转向“补产品能力、稳定性和部署闭环”。
 
-输出：
+## 1.1 长期规划主线
 
-1. 完整系统架构图（App / SDK / Server）
-2. BLE / TCP / MQTT 数据流
-3. ROS1控制路径设计
-4. 协议设计确认（详细字段级）
-5. Command Queue设计
-6. ACK + 重传机制设计
-7. 风险分析
-8. 确认开发顺序
+产品长期规划按五条主线推进：
 
-⚠️ 禁止写代码
+1. 互联
+2. 动作控制
+3. 教育
+4. 视觉
+5. SKILL 平台
 
-------------------------------------------------
-【PHASE 1 - SKELETON】
-------------------------------------------------
+其中：
 
-创建完整工程结构：
+- 互联：指 App、BLE、TCP、MQTT、`robot_server`、ROS 的连接与通信体系
+- 动作控制：指姿态、连续控制、腿部参数、步态参数控制
+- 教育：指面向 K12 的图形化编程
+- 视觉：指通过外置摄像头实现人物识别、手势识别和跟随
+- SKILL 平台：指用户通过平台自定义动作，而不是由研发持续手工新增自定义动作
 
-robot_factory/
-├── mobile_sdk
-├── robot_server
-├── protocol
-├── apps
+当前进度判断：
 
-要求：
-- 所有模块必须有 interface / stub
-- 不实现业务逻辑
+- 互联：已实现
+- 动作控制：已实现基础能力，并开始扩展参数化控制
+- 教育：当前 MVP 只覆盖简单图形化编程
+- 视觉：长期规划，当前不纳入 MVP
+- SKILL 平台：长期规划，当前不纳入 MVP
 
-------------------------------------------------
-【PHASE 2 - IMPLEMENTATION（按顺序）】
-------------------------------------------------
+当前 MVP 范围明确为：
 
-========================
-1️⃣ BLE（必须完整实现🔥）
-========================
+- 互联
+- 动作控制
+- 部分教育
 
-- BlueZ GATT Server
-- Service:
-  RobotControlService
+当前 MVP 不包含视觉能力和 SKILL 平台。
 
-Characteristics:
-- cmd_char (write without response)
-- state_char (notify)
+当前 MVP 中“部分教育”的定义为：
 
-要求：
-- 二进制收发
-- MTU考虑
-- 粘包处理
-- ACK + 重传（3次，100ms timeout）
-- 10Hz state push
+- 简单图形化编程
+- 通过基础 block 串联已有连接和动作控制能力
 
-========================
-2️⃣ Protocol Layer（统一协议🔥）
-========================
+当前 MVP 不包含：
 
-数据帧：
+- 复杂参数化教学工作台
+- 用户自定义动作平台
+- 视觉能力
 
-| 0xAA55 | Type | Seq | Len | Payload | CRC |
+## 2. 当前事实基线
 
-Type:
-0x01 CMD
-0x02 STATE
-0x03 ACK
+### 2.1 已实现
 
-CMD Payload：
+#### 协议层
 
-MOVE（0x01）：
-| cmd_id | vx(int16) | vy(int16) | yaw(int16) |
-说明：实际值 * 100
+- 固定帧格式：`0xAA55 | Type | Seq | Len | Payload | CRC16`
+- `Type`：
+  - `0x01 CMD`
+  - `0x02 STATE`
+  - `0x03 ACK`
+- Python / Dart 双端已实现编码、解码、CRC16 和 stream decoder
+- 已支持 `MOVE / STAND / SIT / STOP`
+- 已扩展 `0x20 skill_invoke`，当前接 `do_action` 与 `do_dog_behavior`
+- `ServiceId` 中虽然预留了 `setMotionParams` / `smartAction` 枚举位，但当前协议实现和业务链路并未真正接通这些能力
 
-DISCRETE：
-| cmd_id |
-0x10 stand
-0x11 sit
-0x12 stop
+#### 机器人端 `robot_server`
 
-STATE：
-| battery | roll(int16) | pitch | yaw |
+- 已实现 BLE / TCP / MQTT transport
+- 已实现统一 parser、ACK、重复包去重和 10Hz STATE 广播
+- ACK 语义已收口为：命令成功进入 `robot_server` 本地处理链后回 ACK
+- 已实现 ROS1 `/cmd_vel` 控制桥
+- 已实现 ROS skill bridge
+- 已实现 ROS 状态采集桥，接电池 / IMU / odom / diagnostics
+- 已提供 `.env.example`、启动脚本和部署文档
+- 已完成一条真实主链联调：手机 App 连接机器狗 BLE 服务，发送控制命令，`robot_server` 收到后转成 ROS 命令驱动机器狗
+- 当前已确认机器狗底层存在真实可调控的参数接口，可作为单腿 / 双腿 / 四腿控制与步态参数化的下层能力基础
 
-ACK：
-| seq |
+#### SDK `mobile_sdk`
 
-要求：
-- 支持粘包解析
-- CRC校验
-- stream decoder
+- 已实现 `RobotClient.connectBLE()` / `connectTCP()` / `connectMQTT()`
+- 已实现 `move()` / `stand()` / `sit()` / `stop()`
+- 已实现 `doAction()` / `doDogBehavior()`
+- 已实现命令队列语义：`move` 覆盖、离散命令 FIFO、未 ACK 重试
+- 已实现 BLE 扫描、状态流、连接状态流和错误流
+- 当前未对外提供“腿控制”“步态参数控制”“自定义姿态参数控制”API，仍需在协议、SDK 和 bridge 层接通
 
-========================
-3️⃣ Command Queue（必须实现🔥）
-========================
+#### App `apps/robot_app`
 
-规则：
+- 已实现 BLE 扫描、连接和数据交互验证
+- 已实现 TCP / MQTT 连接配置弹窗
+- 已实现连接状态展示和状态看板
+- 已实现首页快捷动作控制
+- 已实现动作序列编辑、执行、暂停、恢复、停止
+- 已完成 BLE 控制闭环验证：App 可通过 BLE 向机器狗发送控制命令，并驱动 ROS 控制链路
+- 当前未实现 block 编程工作台，也未实现腿部参数编辑器
 
-- move：只保留最新（覆盖）
-- discrete：FIFO执行
+### 2.2 尚未完成
 
-ACK关系：
-- 未ACK → 阻塞重传逻辑
+- App 仍是演示级控制台，不是完整产品化 App
+- 设备绑定、最近设备记忆和用户级配置持久化未完成
+- 正式的手动遥控 UI 未完成，当前仅有快捷动作直控
+- 简单图形化编程未实现
+- SDK 尚未完成真正的 BLE > TCP > MQTT 自动切换
+- BLE / MQTT / ROS 仍依赖真机或真实 broker 做最终联调
+- 协议 golden vectors、runtime 集成回归和更多 CI 级 smoke 仍待补齐
+- 视觉能力未启动，包括外置摄像头接入、人物识别、手势识别和跟随
+- SKILL 平台未启动，用户仍不能通过平台自定义动作
 
-========================
-4️⃣ TCP（框架）
-========================
+## 3. 本阶段产品目标
 
-- socket server
-- stream input
-- 接入 protocol parser
-- 不做BLE级别完整优化
+### 3.1 核心目标
 
-========================
-5️⃣ MQTT（框架 + Router）
-========================
+1. 保持统一协议、统一 SDK、统一机器人端运行时，不让 App 直接依赖 transport 细节。
+2. 以 BLE 作为默认主链路，保留 TCP / MQTT 作为调试和远程扩展路径。
+3. 把 App 从“可联调演示”推进到“可交付控制产品的第一版”。
+4. 为 K12 教学提供简单、可理解、可演示的图形化控制能力。
+5. 把部署、联调、稳定性验证和自动化回归进一步补齐。
 
-Topic：
+### 3.2 当前 MVP 目标
 
-robot/{id}/control
-robot/{id}/state
-robot/{id}/event
+两周 MVP 只覆盖：
 
-规则：
+1. 互联
+2. 动作控制
+3. 部分教育
 
-- control → binary protocol
-- state → binary
-- event → JSON
+具体来说：
 
-必须实现：
-- Topic Router
-- Protocol dispatch
+- 互联：BLE 连接与控制主链稳定可用
+- 动作控制：基础动作控制、已有动作调用、控制链路稳定
+- 教育：简单 block 编程 MVP，可支撑课堂演示
 
-========================
-6️⃣ ROS1 集成（Noetic）
-========================
+不纳入当前 MVP：
 
-- rospy
-- 发布 /cmd_vel
-- geometry_msgs/Twist
+- 视觉能力
+- SKILL 平台
+- 完整课程模板系统
+- 高级 Blockly 工作台
+- 用户自定义动作平台
+### 3.3 非目标
 
-映射：
+- 不引入账号体系、云管理后台或商业化运营能力
+- 不做多机器人协同
+- 不引入视频流、地图、导航或复杂感知能力
+- 不重构现有 monorepo 结构
+- 两周版本不追求一次交付完整参数化动作编辑器，而是优先交付最小可教、可演示、可真机执行的版本
+- 不在两周版本内交付视觉能力，包括人物识别、手势识别和跟随
+- 不在两周版本内交付 SKILL 平台，包括用户自定义动作平台
 
-vx → linear.x
-yaw → angular.z
+## 4. 架构与约束
 
-频率：
-- 10Hz control sync
+### 4.1 模块边界
 
-========================
-7️⃣ Flutter SDK
-========================
+- App 必须通过 `mobile_sdk.RobotClient` 完成业务流程
+- `robot_server` 的 BLE / TCP / MQTT 都必须走统一 protocol parser、`StateStore` 和 runtime 编排
+- `protocol` 仅承载纯协议逻辑，不依赖 ROS / Flutter / BlueZ
 
-RobotClient API：
+### 4.2 运行环境约束
 
-- connectBLE()
-- connectTCP()
-- connectMQTT()
+#### 机器人端
 
-- move(vx, vy, yaw)
-- stand()
-- sit()
-- stop()
+- Ubuntu 20.04
+- ROS1 Noetic
+- Python 3.8
 
-- stateStream
+#### Flutter / Dart
 
-Transport：
+- 保持与当前 `pubspec.yaml` 兼容
+- SDK 不引入 UI 逻辑和页面导航逻辑
 
-- BLE（完整实现）
-- TCP（接口）
-- MQTT（接口）
+### 4.3 协议约束
 
-========================
-8️⃣ 图形化编程（App内模块）
-========================
+#### 帧格式
 
-Action Engine：
+`0xAA55 | Type | Seq | Len | Payload | CRC16`
 
-输入：
-[
-  {cmd:"stand"},
-  {cmd:"move", vx:0.5, duration:2000},
-  {cmd:"sit"}
-]
+#### CMD Payload
 
-要求：
-- 状态机执行
+- `MOVE`：`cmd_id=0x01`，`vx/vy/yaw` 为 `int16`，实际值乘以 `100`
+- `DISCRETE`：
+  - `0x10 stand`
+  - `0x11 sit`
+  - `0x12 stop`
+- `skill_invoke`：
+  - `0x20`
+  - 一期当前用于 `do_action` / `do_dog_behavior`
+
+#### STATE Payload
+
+- `battery | roll(int16) | pitch(int16) | yaw(int16)`
+
+#### ACK Payload
+
+- `seq`
+
+#### 传输补充
+
+- 必须支持粘包、CRC 校验和 stream decoder
+- MQTT topic 固定为：
+  - `robot/{id}/control`
+  - `robot/{id}/state`
+  - `robot/{id}/event`
+- 状态推送默认 10Hz
+- 命令队列语义保持：
+  - `move` 仅保留最新
+  - `discrete` FIFO
+  - 未 ACK 阻塞重传，100ms 超时，最多 3 次
+
+### 4.4 长期能力的前置条件
+
+要实现后续教育深化、视觉能力和 SKILL 平台，必须满足：
+
+- 机器人底层控制接口稳定可复用
+- `robot_server`、协议和 SDK 对这些接口有统一封装
+- App 侧能力不会绕过 SDK 直接耦合底层实现
+
+## 5. 功能需求
+
+### 5.1 App 需求
+
+#### A. 设备连接与管理
+
+本阶段要求：
+
+- 支持 BLE 扫描与设备选择
+- 支持 TCP / MQTT 参数输入与连接
+- 展示当前连接方式与连接状态
+
+本阶段待补：
+
+- 最近设备记忆
+- 设备绑定与配置持久化
+- 更明确的错误恢复与重试入口
+
+#### B. 控制能力
+
+已具备：
+
+- `stand / sit / stop`
+- 常用 `do_dog_behavior`
+- 动作序列执行
+
+本阶段待补：
+
+- 正式手动遥控 UI
+- 连续运动控制入口
+- 更细的操作反馈
+
+#### D. K12 图形化控制
+
+两周 MVP 只要求：
+
+- 提供简单的 block 编程入口
+- 支持顺序执行 block
 - 支持暂停 / 停止
-- 调用 RobotClient
+- 能调用现有动作控制能力完成课堂演示
 
-================================================
-【输出要求】
-================================================
+本阶段不要求：
 
-必须输出：
+- 完整参数化动作编辑器
+- 高级控制流
+- 用户自定义动作平台
 
-1. Phase 0（设计）
-2. Phase 1（架构）
-3. Phase 2（代码实现）
+#### E. SKILL 平台
+
+长期目标：
+
+- 用户通过平台自定义动作
+- 用户可组合动作并形成自己的 skill
+- 研发不再以“每新增一个动作就开发一次”的方式支撑长期需求
+
+当前阶段：
+
+- 不纳入 MVP
+- 只在 PRD 中保留为长期规划
+
+#### C. 状态展示
+
+已具备：
+
+- 电量
+- `roll / pitch / yaw`
+- 最近 STATE 帧信息
+- 连接状态
+
+本阶段待补：
+
+- 更清晰的错误提示和恢复指引
+- 面向产品用户的状态组织，而不是调试字段堆叠
+
+### 5.2 SDK 需求
+
+必须保持：
+
+- `RobotClient` 作为统一入口
+- BLE / TCP / MQTT 三种连接接口
+- 命令队列、ACK 重试和状态流
+
+本阶段重点：
+
+- 收敛 export 边界，避免 App 直接依赖底层 transport
+- 完成更清晰的连接状态模型
+- 为 BLE > TCP > MQTT 自动切换预留或补齐实现
+- 为后续长期能力预留可扩展 API，但两周 MVP 不新增复杂参数化动作 API
+
+### 5.3 机器人端需求
+
+必须保持：
+
+- BLE 默认主链路
+- TCP / MQTT 可按配置启用
+- ACK 在本地处理链接受成功后回包
+- 10Hz 状态广播
+- `/cmd_vel` 连续控制
+- skill bridge 与 ROS 状态采集能力
+
+本阶段重点：
+
+- 稳定性回归
+- 真机部署收敛
+- BLE / MQTT / ROS smoke 验证沉淀
+- 保持当前 BLE -> `robot_server` -> ROS 主链稳定，并为后续能力扩展保留接口
+
+### 5.4 协议与测试需求
+
+本阶段重点：
+
+- 增加 Python ↔ Dart golden vectors
+- 增加 `RobotRuntime` 集成测试
+- 增加 `RobotClient` mock transport 回归
+- 增加 BLE / MQTT 相关 smoke 自动化
+
+## 6. 当前优先级
+
+### P0
+
+1. 两周 MVP 范围裁剪：只交付互联、动作控制、简单图形化编程
+2. App 设备管理、配置记忆和产品化连接体验
+3. Blockly / 简单图形化编程 MVP
+4. 协议 golden vectors 和关键 runtime / SDK 回归
+
+### P1
+
+1. 图形化编程体验优化
+2. SDK 自动切换与更完整连接状态模型
+3. BLE 长时压测、多终端回归
+4. 动作控制参数化扩展
+
+### P2
+
+1. 完整 Blockly 工作台与模板管理
+2. SKILL 平台一期
+3. 视觉能力一期，包括外置摄像头接入与识别链路
+4. UI 视觉和交互细化
+5. 连接质量指标暴露
+6. 更多扩展事件与配置能力
+
+## 7. 验收标准
+
+### 7.1 当前阶段完成标准
+
+满足以下条件，可认为本阶段从“演示控制台”进入“可交付第一版”：
+
+1. App 能完成 BLE 设备选择、连接、状态查看、基础控制和动作编排。
+2. App 能记住最近设备或最近连接参数，不需要每次重新手输。
+3. App 提供正式的基础控制入口，而不仅是几个快捷按钮。
+4. `RobotClient` 仍是唯一业务入口，UI 层不直接拼 transport 逻辑。
+5. Python / Dart 协议一致性有 golden vectors 保护。
+6. 机器人端部署文档、启动方式和 smoke 验证可复现。
+7. 若交付 K12 图形化控制，block 能真实调用现有动作控制能力完成课堂演示。
+
+### 7.2 当前已知风险
+
+- ACK 仅表示 server 接受命令，不表示机器人动作已经执行完成
+- BLE / MQTT / ROS 仍需要真机环境验证，单测不能替代端到端结果
+- event 当前只走 MQTT，不走 BLE / TCP
+- App 和 SDK 在自动回退、持久化和正式控制交互上仍未完全收口
+- 两周内的最大风险不再是底层接口是否存在，而是范围控制、简单图形化编程交互质量和真机调试耗时
+- 团队只有 2 名研发、1 台机器狗、没有专职测试，真实联调和回归会成为排期瓶颈
+
+## 8. 建议研发排期
+
+> 以下排期基于你当前给出的真实条件：
+> - 团队：2 名研发 + 1 名产品
+> - 测试：无专职测试
+> - 设备：1 台机器狗
+> - 场景：K12 教育
+> - 起始时间假设：2026-04-27
+> - 当前已打通：App -> BLE -> `robot_server` -> ROS -> 机器狗 控制主链
+> - 目标：两周内交付一个可真实演示的 K12 MVP
+>
+> 两周版本建议只承诺以下范围：
+>
+> - BLE 连接与控制链继续可用
+> - 简单 Blockly / block 编程 MVP
+> - 基础动作控制的 block 化调用
+> - 课堂演示可用的默认流程
+>
+> 以下内容不纳入两周版本：
+>
+> - 复杂参数化动作编辑器
+> - 完整课程模板系统
+> - 复杂 block 嵌套和高级控制流
+> - 自动切换传输、MQTT 深化、复杂配置管理
+> - 视觉能力
+> - SKILL 平台
+
+### 第 1 周：打通 K12 MVP 主链
+
+- 固定两周 MVP 范围和 block 集
+- 收口现有动作控制能力在 `RobotClient` 的对外入口
+- 在 App 中接入简单 block 编辑器和执行模型
+- 接入基础动作 block
+- 跑通课堂演示默认流程
+
+交付结果：
+
+- 从 block 到 `RobotClient` 到 BLE 到 `robot_server` 到 ROS 的课堂演示主链可跑通
+
+### 第 2 周：补交互、联调、收口
+
+- 完成 block 交互收口
+- 完成简单图形化编程的执行、暂停、停止体验
+- 做基础错误提示和连接记忆
+- 用真机完成课堂演示链路回归
+- 补文档、演示脚本和验收清单
+
+交付结果：
+
+- 一版两周可交付的 K12 演示版本
+
+### 两周版本里程碑判断
+
+#### 第 1 周结束
+
+- block 执行主链已打通
+- 至少 3 个基础动作 block 可真实驱动机器狗
+- 默认课堂流程可执行
+
+#### 第 2 周结束
+
+- 教师可完成一次完整课堂演示
+- 教师可通过 block 完成一次完整课堂演示
+- 关键文档、演示脚本和已知限制说明齐备
+
+## 9. 研发建议
+
+1. 短期内不要推翻现有架构，继续沿 `protocol -> robot_server -> mobile_sdk -> app` 的边界推进。
+2. 不要把“图形化 block 编程”误判为纯前端工作；它首先是现有动作控制能力的产品化封装问题。
+3. 两周版本必须严控范围，优先保证“能演示、能教学、能真机执行”，不要追求参数面面俱到。
+4. 只有 1 台机器狗时，必须把真机窗口视为稀缺资源，优先留给阶段性集成和验收，不要留到最后一周。
+5. 所有文档必须明确区分“已实现”“待实现”“依赖真机验证”，避免再把目标态写成现状。

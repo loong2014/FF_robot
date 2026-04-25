@@ -4,6 +4,7 @@
 > 依据：`prd.md`、`brd.md`、`docs/cursor_opus_development_roadmap.md`，以及对 `protocol/` / `robot_server/` / `mobile_sdk/` / `apps/robot_app/` 的并行 explore 盘点。  
 > 规则：本文档是所有后续里程碑的上下文锚点；每个里程碑结束时需要回写完成度与剩余风险。
 > 2026-04-23 更新：根据用户反馈，BLE 已完成客户端真实搜索 / 连接 / 数据交互验证；以下与 BLE 基础连通性相关的结论已同步收敛，本轮未做新的真机复测。
+> 2026-04-25 更新：长期规划现已明确为“互联、动作控制、教育、视觉、SKILL 平台”。当前 MVP 只覆盖“互联 + 动作控制 + 教育中的简单图形化编程”，不包含视觉和 SKILL 平台。
 
 ---
 
@@ -12,13 +13,14 @@
 - **协议层（`protocol`）**：帧格式 / CRC / stream decoder / Python ↔ Dart 对齐 **基本到位**。~~主要风险在 **Python 3.8 兼容性**（`@dataclass(slots=True)`、`pyproject.toml requires-python = ">=3.11"`）~~ ✅ 2026-04-21 完成 Python 3.8 兼容性对齐（见 P0-1）；Dart 侧测试覆盖不足的风险仍在。
 - **机器人端（`robot_server`）**：主链可运行（BLE/TCP/MQTT/ROS/StateStore/部署脚手架均已落地）；ACK 语义已收口为“成功接受 `CMD` 进入本地处理链后回 ACK”，重复包按 `seq + payload` 去重，server 侧未接入的 `CommandQueue` 已删除。
 - **SDK（`mobile_sdk`）**：`RobotClient` API + 命令队列 + ACK/重试 + BLE/TCP/MQTT transport + 连接状态已经可用，其中 BLE 已完成客户端真实搜索 / 连接 / 数据交互验证；主要缺口是**没有 BLE > TCP > MQTT 自动切换**，且 export 边界仍偏宽。
-- **App（`apps/robot_app`）**：已具备 **BLE 扫描 / 连接**、TCP/MQTT 参数配置、状态看板、首页快捷动作直控与动作编排；仍是演示级控制台，缺设备绑定、配置持久化与正式运动控制 UI。
+- **App（`apps/robot_app`）**：已具备 **BLE 扫描 / 连接**、TCP/MQTT 参数配置、状态看板、首页快捷动作直控与动作编排；并已完成一条真实主链联调：App 通过 BLE 向机器狗发命令，机器人端转成 ROS 控制机器狗。当前仍是演示级控制台，缺设备绑定、配置持久化与正式运动控制 UI。
 
 **最高优先级的三件事**（建议按顺序推进，与路线图 Milestone 1/2 对齐）：
 
 1. **P0/P1 — 把 App 从演示控制台推进到可交付控制产品**：补设备管理、配置持久化、手动控制 UI 与更完整的错误恢复。
 2. **P1/P2 — 把已验证的 BLE 基础链路沉淀为稳定性回归能力**：补长时压测、多终端回归和 smoke / CI，而不是重复证明能扫到和连上。
 3. **P0/P1 — 收敛 SDK / 协议契约**：补 `mobile_sdk` export 边界、Python ↔ Dart golden vectors 与更多 runtime 回归，减少后续多 transport 漂移。
+4. **新增 P0 Gate — 收敛两周 K12 MVP 范围**：当前关键不再是“能不能做”，而是“两周内只交付简单图形化编程”，避免把参数化动作编辑器、视觉和 SKILL 平台一并塞进首版。
 
 ---
 
@@ -64,6 +66,7 @@
 | P0-6 | **收敛 SDK 对外 export**：`mobile_sdk.dart` 只 export `RobotClient` + 配置模型 + 必要类型；`BleTransport`/`TcpTransport`/`MqttTransport`/`CommandQueue` 改为内部实现，避免 App 绕过 `RobotClient`。 | `mobile_sdk` | S | — |
 | P0-7 | **部署脚手架**：`.env.example`（`ROBOT_*` 全量）、`robot_server` README 补 Noetic 安装步骤、`systemd` unit 示例、依赖声明补 `robot-protocol`。 ✅ 2026-04-22 完成（Milestone 8）：仓库根新增 `.env.example`（按 BLE/TCP/MQTT/ROS 分组的全量 `ROBOT_*`）；新增 `scripts/start_robot_server.sh`（source ROS1 Noetic + 加载 env + 组装 PYTHONPATH，默认从 `/etc/robot_factory/robot_server.env` 读取）+ `scripts/robot_server.service`（systemd unit 示例，带安装/回滚命令注释）；新增 `docs/deploy.md`（拓扑 / 系统 apt 包 / Python 依赖 / 环境变量表 / 启动依赖顺序 / TCP·BLE·MQTT·ROS 联调步骤 / 排错矩阵 / 上线前待办）与 `docs/acceptance_checklist.md`（§0 环境、§1 单测、§2 启动存活、§3–§7 各 transport + ROS、§8 Action Engine、§9 降级、§10 网络观察、§11 报告模板、§12 预发布判定）。`robot-protocol` 依赖尚未通过 `pyproject.toml` 显式声明（仍依赖 `PYTHONPATH` 方式），真机走 `pip install -e protocol/python`；systemd 示例默认 `User=root` 以规避 polkit BLE 限制。 | `robot_server` | M | 🖧 |
 | P0-8 | **Python ↔ Dart 协议 golden vectors 测试**：固定字节向量双端回归，防止将来两边漂移。 | `protocol` | M | — |
+| P0-9 | **K12 两周 MVP 范围收敛**：首版只交付简单图形化编程，用 block 调用当前已有连接与动作控制能力，支撑课堂演示；不做复杂参数化编辑器、视觉能力和 SKILL 平台。 | `mobile_sdk` + `apps/robot_app` | M | — |
 
 ### P1 — 近期跟进
 
