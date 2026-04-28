@@ -9,13 +9,16 @@
 - 记录最近一次成功连接的 BLE 设备，并在下次启动时自动尝试重连
 - BLE 意外断开后的自动重连
 - 新增正式遥控页：双摇杆 + 动作矩阵控制
+- 首页新增完整动作控制页：打包 `robot_skill` JSON，展示全部 `do_action` / `do_dog_behavior`
 - TCP / MQTT 连接配置弹窗
 - 连接状态展示
 - 首页快捷动作直控（stand / sit / stop / 常用 dog behavior）
+- 完整动作控制页展示连接状态、电量、姿态，以及全部动作 / 行为列表；点击后通过 `RobotClient.doAction` / `RobotClient.doDogBehavior` 下发
+- 手动控制页与首页快捷控制使用 `RobotClient` 默认实时语义，连续点击时只保留最后一个尚未发送的控制命令
 - 语音控制模块：基于 Sherpa ONNX 的 `KWS + ASR + VAD` 双阶段链路，先做 `D-Dog` 唤醒，再持续识别到静音结束；支持中文 / 英文 / 中英混合唤醒别名，Android 前台监听，iOS 前台监听。
 - 电量 / 姿态 / 最近 STATE 帧可视化
 - 动作序列编辑、执行、暂停、恢复、停止
-- 动作编排已支持 `move/stand/sit/stop` 以及 `do_action` / `do_dog_behavior`
+- 动作编排已支持 `move/stand/sit/stop` 以及 `do_action` / `do_dog_behavior`，内部走 `RobotClient.*Queued()` 保持 FIFO 顺序执行
 
 ## 当前定位
 
@@ -33,10 +36,18 @@
 ## 正式遥控页说明
 
 - 控制页主流程面向 BLE，页面内只提供 BLE 连接入口。
-- 摇杆和动作按钮统一通过 `mobile_sdk/RobotClient` 下发，不直接依赖 transport 实现。
+- 摇杆和动作按钮统一通过 `mobile_sdk/RobotClient` 下发，不直接依赖 transport 实现；手动控制使用默认实时语义，避免连续点击把多个动作排成 FIFO。
 - 机器人端必须开启 `ROBOT_ROS_ENABLED=true`，`MOVE` 才会真正进入机器人对应的 ROS 控制链；AlphaDog 默认是 `/alphadog_node/set_velocity`。
-- 右上角急停按钮在 `急停` / `恢复` 间切换；`恢复` 会发送恢复命令，摇杆首次进入还会先发送一次“进入运动模式”命令。
+- 右上角急停按钮在 `急停` / `恢复` 间切换；`急停` 会发送真机 `EStop`，`恢复` 会发送 `Recovery stand`，摇杆首次进入还会先发送一次“进入运动模式”命令。
 - 若要让左摇杆的横向移动真正生效，机器人端部署配置还需设置 `ROBOT_ROS_ENABLE_LATERAL=true`。
+
+## 完整动作控制页说明
+
+- 首页入口为“完整动作控制”。
+- 页面资源来自 `apps/robot_app/assets/robot_skill/do_action/ext_actions.json` 与 `apps/robot_app/assets/robot_skill/do_dog_behavior/dog_behaviors.json`。
+- 页面顶部状态只展示当前协议已有字段：连接状态、电量、roll、pitch、yaw。
+- `do_action` 列表按 `action_id + action_name` 作为 UI key；当前资源里 `action_id=20589` 重复，页面会显示重复 ID 提示。
+- `do_dog_behavior` 仍受协议枚举限制；当前 39 个资源行为都能映射到 `DogBehavior`。
 
 ## 运行
 

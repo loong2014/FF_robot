@@ -16,6 +16,7 @@
   - `@docs/codex_development_roadmap.md`
   - `@docs/cursor_opus_development_roadmap.md`
 - 总览与启动入口：`@README.md`
+- 代码地图与定位索引：`@project_tree.md`
 
 当描述冲突时，优先级按以下顺序处理：
 
@@ -29,13 +30,12 @@
 
 - `protocol`：Python / Dart 协议实现已对齐，包含帧结构、CRC16、stream decoder 与基础测试。
 - `robot_server`：已实现 BLE / TCP / MQTT transport、`StateStore`、10Hz STATE 广播、ROS1 `/cmd_vel` 控制桥、ROS 状态采集桥，以及 `.env.example` 与启动脚本。
-- `mobile_sdk`：`RobotClient` 已提供 `connectBLE()` / `connectTCP()` / `connectMQTT()`、命令队列、ACK 重试、连接状态、BLE 扫描、重连策略扩展点。
-- `apps/robot_app`：已实现 BLE 扫描、TCP / MQTT 连接、状态面板、动作序列编辑 / 执行，定位仍偏演示控制台。
+- `mobile_sdk`：`RobotClient` 已提供 `connectBLE()` / `connectTCP()` / `connectMQTT()`、命令队列、ACK 重试、连接状态、BLE 扫描、重连策略扩展点；默认控制 API 为 last-wins，`*Queued` API 用于图形化编排 FIFO 顺序执行。
+- `apps/robot_app`：已实现 BLE 扫描、TCP / MQTT 连接、状态面板、正式遥控页、快捷控制、动作序列编辑 / 执行，定位仍偏演示控制台。
 
 当前仍需保持诚实记录的缺口：
 
-- `robot_server/runtime/command_queue.py` 尚未接入 `RobotRuntime`，服务端“未 ACK 阻塞重传”语义还未真正落地。
-- App 侧还没有完整的设备管理、配置持久化、正式遥控 UI。
+- App 侧还没有完整的设备管理、配置持久化、产品级遥控 UI。
 - BLE / MQTT / ROS 仍依赖真机或真实 broker 才能完成最终联调，不要把本地单测当成端到端完成。
 
 ---
@@ -49,6 +49,7 @@
   - `protocol`：Python + Dart 共享协议
   - `docs`：设计、backlog、联调与部署文档
   - `scripts`：启动脚本与 smoke 工具
+  - `robot_skill`：AlphaDog `do_action` / `do_dog_behavior` 资源与推送脚本
 - 增量修改，优先复用已有 stub、接口与抽象，不得顺手重构与当前任务无关的模块。
 - 模块边界：
   - App 不得绕过 `mobile_sdk.RobotClient` 直接依赖 transport 实现做业务流程。
@@ -100,9 +101,9 @@
   - `robot/{id}/state`（binary）
   - `robot/{id}/event`（JSON）
 - 命令队列语义不允许私自改变：
-  - `move` 仅保留最新
-  - `discrete` FIFO
-  - 未 ACK 阻塞重传（3 次，100ms 超时）
+  - 默认手动控制 API（`move/stand/sit/stop/doAction/doDogBehavior`）为 last-wins，仅保留最后一个尚未发送命令。
+  - 图形化编排必须显式使用 `*Queued` API，保持 FIFO 顺序执行。
+  - 未 ACK 阻塞重传（3 次，100ms 超时）；被新命令取代的旧命令不应继续重传。
 - 状态推送默认 10Hz。
 
 ---
@@ -110,7 +111,7 @@
 ## 6. 工作方式约束
 
 1. 任何跨模块任务先做计划，再执行代码或文档修改；如果所在环境没有 Plan 模式，用等价计划工具或显式计划步骤替代。
-2. 开始前先读 `README.md`、`docs/backlog.md`、相关模块 README 和对应源码入口，不要先拍脑袋下结论。
+2. 开始前先读 `README.md`、`docs/backlog.md`、`project_tree.md`、相关模块 README 和对应源码入口，不要先拍脑袋下结论。
 3. 大范围扫描优先并行探索，再集中实现；如果平台支持 subagent/explorer，可用于信息收集，但不要把阻塞主线的关键修改完全外包。
 4. 引用优先使用仓库相对路径或 `@路径`，不要把绝对路径当成主要沟通方式。
 5. 修改行为、启动方式、环境变量、测试方式时，要同步更新：

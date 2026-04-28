@@ -60,8 +60,20 @@ class _FakeRobotClient extends RobotClient {
   }
 
   @override
+  Future<void> moveLatest(double vx, double vy, double yaw) async {
+    calls.add(
+      'moveLatest(${vx.toStringAsFixed(2)},${vy.toStringAsFixed(2)},${yaw.toStringAsFixed(2)})',
+    );
+  }
+
+  @override
   Future<void> stand() async {
     calls.add('stand');
+  }
+
+  @override
+  Future<void> standLatest() async {
+    calls.add('standLatest');
   }
 
   @override
@@ -70,8 +82,28 @@ class _FakeRobotClient extends RobotClient {
   }
 
   @override
+  Future<void> stopLatest() async {
+    calls.add('stopLatest');
+  }
+
+  @override
+  Future<void> emergencyStop() async {
+    calls.add('emergencyStop');
+  }
+
+  @override
+  Future<void> emergencyStopLatest() async {
+    calls.add('emergencyStopLatest');
+  }
+
+  @override
   Future<void> enterMotionMode() async {
     calls.add('enterMotionMode');
+  }
+
+  @override
+  Future<void> enterMotionModeLatest() async {
+    calls.add('enterMotionModeLatest');
   }
 
   @override
@@ -80,8 +112,18 @@ class _FakeRobotClient extends RobotClient {
   }
 
   @override
+  Future<void> recoverLatest() async {
+    calls.add('recoverLatest');
+  }
+
+  @override
   Future<void> doAction(int actionId, {bool requireAck = true}) async {
     calls.add('action:$actionId');
+  }
+
+  @override
+  Future<void> doActionLatest(int actionId, {bool requireAck = true}) async {
+    calls.add('actionLatest:$actionId');
   }
 
   @override
@@ -90,6 +132,14 @@ class _FakeRobotClient extends RobotClient {
     bool requireAck = true,
   }) async {
     calls.add('behavior:${behavior.name}');
+  }
+
+  @override
+  Future<void> doDogBehaviorLatest(
+    DogBehavior behavior, {
+    bool requireAck = true,
+  }) async {
+    calls.add('behaviorLatest:${behavior.name}');
   }
 }
 
@@ -139,11 +189,13 @@ void main() {
     await tester.tap(find.text('比心'));
     await tester.pump();
     await tester.tap(find.text('急停'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('急停'));
     await tester.pump();
 
     expect(client.calls, contains('stand'));
     expect(client.calls, contains('action:20593'));
-    expect(client.calls, contains('stop'));
+    expect(client.calls, contains('emergencyStop'));
   });
 
   testWidgets(
@@ -154,10 +206,12 @@ void main() {
       await pumpControlPage(tester, client);
 
       await tester.tap(find.text('急停'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.text('急停'));
       await tester.pump();
 
       expect(find.text('恢复'), findsOneWidget);
-      expect(client.calls.last, 'stop');
+      expect(client.calls.last, 'emergencyStop');
 
       final joystickFinder = find.byType(JoystickPad).first;
       final gesture = await tester.startGesture(
@@ -170,8 +224,12 @@ void main() {
 
       expect(client.calls.contains('enterMotionMode'), isFalse);
       expect(
-          client.calls.any((String call) => call.startsWith('move(')), isFalse);
+        client.calls.any((String call) => call.startsWith('move(')),
+        isFalse,
+      );
 
+      await tester.tap(find.text('恢复'));
+      await tester.pump(const Duration(milliseconds: 100));
       await tester.tap(find.text('恢复'));
       await tester.pump();
 
@@ -187,10 +245,33 @@ void main() {
       await tester.pump();
 
       expect(
-          client.calls.where((String call) => call == 'enterMotionMode').length,
-          1);
+        client.calls.where((String call) => call == 'enterMotionMode').length,
+        1,
+      );
       expect(
-          client.calls.any((String call) => call.startsWith('move(')), isTrue);
+        client.calls.any((String call) => call.startsWith('move(')),
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
+    'ControlPage emergency button single tap shows hint after 1s without command',
+    (WidgetTester tester) async {
+      final client = _FakeRobotClient();
+
+      await pumpControlPage(tester, client);
+
+      await tester.tap(find.text('急停'));
+      await tester.pump();
+
+      expect(client.calls, isNot(contains('emergencyStop')));
+      expect(find.text('请双击按钮'), findsNothing);
+
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(client.calls, isNot(contains('emergencyStop')));
+      expect(find.text('请双击按钮'), findsOneWidget);
     },
   );
 

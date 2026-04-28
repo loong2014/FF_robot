@@ -24,3 +24,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/robot_skill/do_action/ext_actions.json
+    - assets/robot_skill/do_dog_behavior/dog_behaviors.json

@@ -7045,7 +7045,7 @@
           - duration: 0.6
             status  : [0.0,0,0.22,0,+0.0,0,0,0,0,0,0,0] 
 
-- action_id: 20589
+- action_id: 20588
   action_name: bored_half_sit
   process: 
     - action_id: 1792 # joints_action

@@ -14,8 +14,18 @@ class _FakeRobotClient extends RobotClient {
   }
 
   @override
+  Future<void> standLatest() async {
+    calls.add('standLatest');
+  }
+
+  @override
   Future<void> sit() async {
     calls.add('sit');
+  }
+
+  @override
+  Future<void> sitLatest() async {
+    calls.add('sitLatest');
   }
 
   @override
@@ -24,11 +34,24 @@ class _FakeRobotClient extends RobotClient {
   }
 
   @override
+  Future<void> stopLatest() async {
+    calls.add('stopLatest');
+  }
+
+  @override
   Future<void> doDogBehavior(
     DogBehavior behavior, {
     bool requireAck = true,
   }) async {
     calls.add('behavior:${behavior.name}');
+  }
+
+  @override
+  Future<void> doDogBehaviorLatest(
+    DogBehavior behavior, {
+    bool requireAck = true,
+  }) async {
+    calls.add('behaviorLatest:${behavior.name}');
   }
 }
 

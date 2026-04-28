@@ -147,7 +147,7 @@ class ControlPageController extends ChangeNotifier {
     _leftDx = 0;
     _leftDy = 0;
     _rightDx = 0;
-    await _client.stop();
+    await _client.emergencyStop();
     _lastAction = '急停';
     notifyListeners();
   }

@@ -11,6 +11,7 @@ class QueuedCommand {
     required this.isMove,
     this.retries = 0,
     this.lastSentAt,
+    this.superseded = false,
   });
 
   final int seq;
@@ -19,10 +20,12 @@ class QueuedCommand {
   final bool isMove;
   final int retries;
   final DateTime? lastSentAt;
+  final bool superseded;
 
   QueuedCommand copyWith({
     int? retries,
     DateTime? lastSentAt,
+    bool? superseded,
     bool clearLastSentAt = false,
   }) {
     return QueuedCommand(
@@ -32,6 +35,7 @@ class QueuedCommand {
       isMove: isMove,
       retries: retries ?? this.retries,
       lastSentAt: clearLastSentAt ? null : (lastSentAt ?? this.lastSentAt),
+      superseded: superseded ?? this.superseded,
     );
   }
 
@@ -43,20 +47,27 @@ class QueuedCommand {
 
 class CommandQueue {
   final Queue<QueuedCommand> _discreteQueue = Queue<QueuedCommand>();
-  QueuedCommand? _moveSlot;
+  QueuedCommand? _latestSlot;
   QueuedCommand? _inflight;
 
   QueuedCommand? get inflight => _inflight;
 
   bool get hasPending =>
-      _inflight != null || _moveSlot != null || _discreteQueue.isNotEmpty;
+      _inflight != null || _latestSlot != null || _discreteQueue.isNotEmpty;
 
   void enqueue(QueuedCommand command) {
     if (command.isMove) {
-      _moveSlot = command;
+      _latestSlot = command;
       return;
     }
+    _latestSlot = null;
     _discreteQueue.add(command);
+  }
+
+  void enqueueLatest(QueuedCommand command) {
+    _discreteQueue.clear();
+    _inflight = _inflight?.copyWith(superseded: true);
+    _latestSlot = command;
   }
 
   QueuedCommand? promoteNext(DateTime sentAt) {
@@ -64,15 +75,14 @@ class CommandQueue {
       return null;
     }
 
-    final next = _discreteQueue.isNotEmpty
-        ? _discreteQueue.removeFirst()
-        : _moveSlot;
+    final next =
+        _discreteQueue.isNotEmpty ? _discreteQueue.removeFirst() : _latestSlot;
     if (next == null) {
       return null;
     }
 
-    if (next.isMove) {
-      _moveSlot = null;
+    if (identical(next, _latestSlot)) {
+      _latestSlot = null;
     }
 
     _inflight = next.markSent(sentAt);

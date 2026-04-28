@@ -175,30 +175,109 @@ class RobotClient {
   }
 
   Future<void> move(double vx, double vy, double yaw) async {
+    await _enqueueLatestCommand(MoveCommand(vx: vx, vy: vy, yaw: yaw));
+  }
+
+  Future<void> moveLatest(double vx, double vy, double yaw) async {
+    await move(vx, vy, yaw);
+  }
+
+  Future<void> moveQueued(double vx, double vy, double yaw) async {
     await _enqueueCommand(MoveCommand(vx: vx, vy: vy, yaw: yaw));
   }
 
   Future<void> stand() async {
+    await _enqueueLatestCommand(const DiscreteCommand(CommandId.stand));
+  }
+
+  Future<void> standLatest() async {
+    await stand();
+  }
+
+  Future<void> standQueued() async {
     await _enqueueCommand(const DiscreteCommand(CommandId.stand));
   }
 
   Future<void> sit() async {
+    await _enqueueLatestCommand(const DiscreteCommand(CommandId.sit));
+  }
+
+  Future<void> sitLatest() async {
+    await sit();
+  }
+
+  Future<void> sitQueued() async {
     await _enqueueCommand(const DiscreteCommand(CommandId.sit));
   }
 
   Future<void> stop() async {
+    await _enqueueLatestCommand(const DiscreteCommand(CommandId.stop));
+  }
+
+  Future<void> stopLatest() async {
+    await stop();
+  }
+
+  Future<void> stopQueued() async {
     await _enqueueCommand(const DiscreteCommand(CommandId.stop));
   }
 
+  Future<void> emergencyStop() async {
+    await _enqueueLatestCommand(SkillInvokeCommand.doAction(actionId: 0));
+  }
+
+  Future<void> emergencyStopLatest() async {
+    await emergencyStop();
+  }
+
+  Future<void> emergencyStopQueued() async {
+    await _enqueueCommand(SkillInvokeCommand.doAction(actionId: 0));
+  }
+
   Future<void> enterMotionMode() async {
+    await _enqueueLatestCommand(SkillInvokeCommand.doAction(actionId: 4));
+  }
+
+  Future<void> enterMotionModeLatest() async {
+    await enterMotionMode();
+  }
+
+  Future<void> enterMotionModeQueued() async {
     await _enqueueCommand(SkillInvokeCommand.doAction(actionId: 4));
   }
 
   Future<void> recover() async {
+    await _enqueueLatestCommand(SkillInvokeCommand.doAction(actionId: 3));
+  }
+
+  Future<void> recoverLatest() async {
+    await recover();
+  }
+
+  Future<void> recoverQueued() async {
     await _enqueueCommand(SkillInvokeCommand.doAction(actionId: 3));
   }
 
   Future<void> doAction(
+    int actionId, {
+    bool requireAck = true,
+  }) async {
+    await _enqueueLatestCommand(
+      SkillInvokeCommand.doAction(
+        actionId: actionId,
+        requireAck: requireAck,
+      ),
+    );
+  }
+
+  Future<void> doActionLatest(
+    int actionId, {
+    bool requireAck = true,
+  }) async {
+    await doAction(actionId, requireAck: requireAck);
+  }
+
+  Future<void> doActionQueued(
     int actionId, {
     bool requireAck = true,
   }) async {
@@ -214,6 +293,25 @@ class RobotClient {
     DogBehavior behavior, {
     bool requireAck = true,
   }) async {
+    await _enqueueLatestCommand(
+      SkillInvokeCommand.doDogBehavior(
+        behavior: behavior,
+        requireAck: requireAck,
+      ),
+    );
+  }
+
+  Future<void> doDogBehaviorLatest(
+    DogBehavior behavior, {
+    bool requireAck = true,
+  }) async {
+    await doDogBehavior(behavior, requireAck: requireAck);
+  }
+
+  Future<void> doDogBehaviorQueued(
+    DogBehavior behavior, {
+    bool requireAck = true,
+  }) async {
     await _enqueueCommand(
       SkillInvokeCommand.doDogBehavior(
         behavior: behavior,
@@ -226,6 +324,20 @@ class RobotClient {
     final seq = _nextSequence();
     final frameBytes = encodeFrame(buildCommandFrame(command, seq));
     _queue.enqueue(
+      QueuedCommand(
+        seq: seq,
+        command: command,
+        frameBytes: frameBytes,
+        isMove: command.isMove,
+      ),
+    );
+    await _pumpQueue();
+  }
+
+  Future<void> _enqueueLatestCommand(RobotCommand command) async {
+    final seq = _nextSequence();
+    final frameBytes = encodeFrame(buildCommandFrame(command, seq));
+    _queue.enqueueLatest(
       QueuedCommand(
         seq: seq,
         command: command,
@@ -302,6 +414,12 @@ class RobotClient {
     final lastSentAt = current.lastSentAt;
     if (lastSentAt != null &&
         DateTime.now().difference(lastSentAt) < ackTimeout) {
+      return;
+    }
+
+    if (current.superseded) {
+      _queue.dropCurrent();
+      unawaited(_pumpQueue());
       return;
     }
 

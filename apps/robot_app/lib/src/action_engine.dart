@@ -12,8 +12,8 @@ class ActionEngine {
     this.client, {
     @pragma('vm:prefer-inline') SleepFn? sleep,
     NowFn? now,
-  }) : _sleep = sleep ?? _defaultSleep,
-       _now = now ?? DateTime.now;
+  })  : _sleep = sleep ?? _defaultSleep,
+        _now = now ?? DateTime.now;
 
   final RobotClient client;
   final SleepFn _sleep;
@@ -40,10 +40,10 @@ class ActionEngine {
   ActionEngineStatus get status => _status;
 
   ActionProgress get currentProgress => ActionProgress(
-    engineStatus: _status,
-    currentIndex: _currentIndex,
-    steps: List<ActionStepProgress>.unmodifiable(_stepProgress),
-  );
+        engineStatus: _status,
+        currentIndex: _currentIndex,
+        steps: List<ActionStepProgress>.unmodifiable(_stepProgress),
+      );
 
   Future<void> run(List<ActionStep> program) async {
     if (_status == ActionEngineStatus.running ||
@@ -202,22 +202,22 @@ class ActionEngine {
   Future<void> _runOne(ActionStep step) async {
     switch (step.type) {
       case ActionCommandType.stand:
-        await client.stand();
+        await client.standQueued();
         break;
       case ActionCommandType.sit:
-        await client.sit();
+        await client.sitQueued();
         break;
       case ActionCommandType.stop:
-        await client.stop();
+        await client.stopQueued();
         break;
       case ActionCommandType.move:
         await _runMove(step);
         break;
       case ActionCommandType.doAction:
-        await client.doAction(step.actionId ?? 0);
+        await client.doActionQueued(step.actionId ?? 0);
         break;
       case ActionCommandType.doDogBehavior:
-        await client.doDogBehavior(step.behavior ?? DogBehavior.waveHand);
+        await client.doDogBehaviorQueued(step.behavior ?? DogBehavior.waveHand);
         break;
     }
   }
@@ -231,14 +231,14 @@ class ActionEngine {
       if (_stopRequested) {
         return;
       }
-      await client.move(step.vx, step.vy, step.yaw);
+      await client.moveQueued(step.vx, step.vy, step.yaw);
       if (duration == Duration.zero) {
         break;
       }
       await _sleep(const Duration(milliseconds: 100));
     } while (_now().isBefore(deadline));
 
-    await client.stop();
+    await client.stopQueued();
   }
 
   Future<void> _waitIfPaused() async {

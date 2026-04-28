@@ -26,10 +26,20 @@ class ControlPage extends StatefulWidget {
 }
 
 class _ControlPageState extends State<ControlPage> {
+  static const Duration _kEmergencyDoubleTapWindow = Duration(milliseconds: 450);
+  static const Duration _kEmergencySingleTapHintDelay = Duration(seconds: 1);
+  static const Duration _kToastVisibleDuration = Duration(milliseconds: 1400);
+
   late final ControlPageController _controller = ControlPageController(
     client: widget.client,
     initialBleDeviceName: widget.initialBleDeviceName,
   );
+
+  Timer? _emergencyHintTimer;
+  DateTime? _emergencyFirstTapTime;
+
+  Timer? _toastRemoveTimer;
+  OverlayEntry? _toastOverlayEntry;
 
   @override
   void initState() {
@@ -43,6 +53,10 @@ class _ControlPageState extends State<ControlPage> {
 
   @override
   void dispose() {
+    _emergencyHintTimer?.cancel();
+    _toastRemoveTimer?.cancel();
+    _toastOverlayEntry?.remove();
+    _toastOverlayEntry = null;
     _controller.dispose();
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -201,9 +215,7 @@ class _ControlPageState extends State<ControlPage> {
             height: 42,
             child: FilledButton(
               onPressed: _controller.isBleConnected
-                  ? (_controller.isEmergencyStopped
-                      ? _recoverEmergencyStop
-                      : _emergencyStop)
+                  ? _onEmergencyOrRecoverButtonPressed
                   : null,
               style: FilledButton.styleFrom(
                 backgroundColor: _controller.isEmergencyStopped
@@ -353,6 +365,32 @@ class _ControlPageState extends State<ControlPage> {
     }
   }
 
+  void _onEmergencyOrRecoverButtonPressed() {
+    final DateTime now = DateTime.now();
+    if (_emergencyFirstTapTime != null &&
+        now.difference(_emergencyFirstTapTime!) <= _kEmergencyDoubleTapWindow) {
+      _emergencyHintTimer?.cancel();
+      _emergencyHintTimer = null;
+      _emergencyFirstTapTime = null;
+      if (_controller.isEmergencyStopped) {
+        unawaited(_recoverEmergencyStop());
+      } else {
+        unawaited(_emergencyStop());
+      }
+      return;
+    }
+    _emergencyFirstTapTime = now;
+    _emergencyHintTimer?.cancel();
+    _emergencyHintTimer = Timer(_kEmergencySingleTapHintDelay, () {
+      _emergencyHintTimer = null;
+      _emergencyFirstTapTime = null;
+      if (!mounted) {
+        return;
+      }
+      _showMessage('请双击按钮');
+    });
+  }
+
   Future<void> _emergencyStop() async {
     try {
       await _controller.emergencyStop();
@@ -372,9 +410,65 @@ class _ControlPageState extends State<ControlPage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+    if (!mounted) {
+      return;
+    }
+    final OverlayState? overlay = Overlay.maybeOf(context);
+    if (overlay == null) {
+      return;
+    }
+    _toastRemoveTimer?.cancel();
+    _toastOverlayEntry?.remove();
+    _toastOverlayEntry = null;
+
+    final OverlayEntry entry = OverlayEntry(
+      builder: (BuildContext ctx) => IgnorePointer(
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 88),
+            child: Material(
+              color: Colors.transparent,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xE6282830),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const <BoxShadow>[
+                    BoxShadow(
+                      color: Color(0x33000000),
+                      blurRadius: 12,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  child: Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
+    _toastOverlayEntry = entry;
+    overlay.insert(entry);
+    _toastRemoveTimer = Timer(_kToastVisibleDuration, () {
+      _toastRemoveTimer = null;
+      entry.remove();
+      if (_toastOverlayEntry == entry) {
+        _toastOverlayEntry = null;
+      }
+    });
   }
 }
 

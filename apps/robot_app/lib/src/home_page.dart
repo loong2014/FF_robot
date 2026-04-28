@@ -14,6 +14,7 @@ import 'control_page.dart';
 import 'gesture_module_page.dart';
 import 'mqtt_connect_dialog.dart';
 import 'quick_control_panel.dart';
+import 'skill_control_page.dart';
 import 'voice_module_page.dart';
 import 'tcp_connect_dialog.dart';
 
@@ -302,6 +303,32 @@ class _HomePageState extends State<HomePage> {
                             ),
                           ),
                           _ControlCard(
+                            title: '完整动作控制',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  '读取 robot_skill 资源，展示机器狗状态、全部 do_action 动作和 do_dog_behavior 行为。',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: const Color(0xFF4B6B66),
+                                      ),
+                                ),
+                                const SizedBox(height: 16),
+                                FilledButton.icon(
+                                  onPressed: _openSkillControlPage,
+                                  icon: const Icon(
+                                    Icons.grid_view_rounded,
+                                    size: 18,
+                                  ),
+                                  label: const Text('打开完整控制'),
+                                ),
+                              ],
+                            ),
+                          ),
+                          _ControlCard(
                             title: '手势识别模块',
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -521,6 +548,14 @@ class _HomePageState extends State<HomePage> {
             unawaited(_rememberBleDevice(device));
           },
         ),
+      ),
+    );
+  }
+
+  Future<void> _openSkillControlPage() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => SkillControlPage(client: _client),
       ),
     );
   }

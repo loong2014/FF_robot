@@ -128,7 +128,7 @@ void main() {
       final tcpTransport = _FakeTransport();
       final mqttTransport = _FakeTransport();
       final client = RobotClient(
-        ackTimeout: const Duration(milliseconds: 1),
+        ackTimeout: const Duration(seconds: 5),
         transportFactory: (transport, options) {
           if (transport == TransportKind.tcp) {
             return tcpTransport;
@@ -179,7 +179,7 @@ void main() {
       final bleTransport = _FakeTransport();
       var mqttFactoryCalls = 0;
       final client = RobotClient(
-        ackTimeout: const Duration(milliseconds: 1),
+        ackTimeout: const Duration(seconds: 5),
         transportFactory: (transport, options) {
           if (transport == TransportKind.tcp) {
             return tcpTransport;
@@ -364,6 +364,108 @@ void main() {
       final command = parseCommandPayload(frame.payload);
       expect(command, isA<SkillInvokeCommand>());
       expect((command as SkillInvokeCommand).behaviorId, DogBehavior.waveHand);
+
+      await client.dispose();
+    });
+
+    test('queued control commands preserve FIFO for programs', () async {
+      final bleTransport = _FakeTransport();
+      final client = RobotClient(
+        transportFactory: (transport, options) => bleTransport,
+      );
+
+      await client.connectBLE(
+        options: const BleConnectionOptions(deviceId: 'robot-1'),
+      );
+      await client.standQueued();
+      await client.sitQueued();
+      await client.doActionQueued(20593);
+
+      expect(bleTransport.sentPayloads, hasLength(1));
+      var frame = decodeFrame(Uint8List.fromList(bleTransport.sentPayloads[0]));
+      var command = parseCommandPayload(frame.payload);
+      expect(command, isA<DiscreteCommand>());
+      expect((command as DiscreteCommand).commandId, CommandId.stand);
+
+      bleTransport.emitFrame(buildAckFrame(frame.seq));
+      await _flushAsync();
+      expect(bleTransport.sentPayloads, hasLength(2));
+      frame = decodeFrame(Uint8List.fromList(bleTransport.sentPayloads[1]));
+      command = parseCommandPayload(frame.payload);
+      expect(command, isA<DiscreteCommand>());
+      expect((command as DiscreteCommand).commandId, CommandId.sit);
+
+      bleTransport.emitFrame(buildAckFrame(frame.seq));
+      await _flushAsync();
+      expect(bleTransport.sentPayloads, hasLength(3));
+      frame = decodeFrame(Uint8List.fromList(bleTransport.sentPayloads[2]));
+      command = parseCommandPayload(frame.payload);
+      expect(command, isA<SkillInvokeCommand>());
+      expect((command as SkillInvokeCommand).actionId, 20593);
+
+      await client.dispose();
+    });
+
+    test('default control commands replace unsent pending commands', () async {
+      final bleTransport = _FakeTransport();
+      final client = RobotClient(
+        transportFactory: (transport, options) => bleTransport,
+      );
+
+      await client.connectBLE(
+        options: const BleConnectionOptions(deviceId: 'robot-1'),
+      );
+      await client.stand();
+      await client.sit();
+      await client.doAction(20593);
+
+      expect(bleTransport.sentPayloads, hasLength(1));
+      final firstFrame =
+          decodeFrame(Uint8List.fromList(bleTransport.sentPayloads[0]));
+      final firstCommand = parseCommandPayload(firstFrame.payload);
+      expect(firstCommand, isA<DiscreteCommand>());
+      expect((firstCommand as DiscreteCommand).commandId, CommandId.stand);
+
+      bleTransport.emitFrame(buildAckFrame(firstFrame.seq));
+      await _flushAsync();
+
+      expect(bleTransport.sentPayloads, hasLength(2));
+      final secondFrame =
+          decodeFrame(Uint8List.fromList(bleTransport.sentPayloads[1]));
+      final secondCommand = parseCommandPayload(secondFrame.payload);
+      expect(secondCommand, isA<SkillInvokeCommand>());
+      expect((secondCommand as SkillInvokeCommand).actionId, 20593);
+
+      await client.dispose();
+    });
+
+    test('superseded default command is not retried before newer command',
+        () async {
+      final bleTransport = _FakeTransport();
+      final client = RobotClient(
+        ackTimeout: const Duration(milliseconds: 1),
+        transportFactory: (transport, options) => bleTransport,
+      );
+
+      await client.connectBLE(
+        options: const BleConnectionOptions(deviceId: 'robot-1'),
+      );
+      await client.stand();
+      await client.doAction(20593);
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+
+      expect(bleTransport.sentPayloads, hasLength(2));
+      final firstFrame =
+          decodeFrame(Uint8List.fromList(bleTransport.sentPayloads[0]));
+      final secondFrame =
+          decodeFrame(Uint8List.fromList(bleTransport.sentPayloads[1]));
+      final firstCommand = parseCommandPayload(firstFrame.payload);
+      final secondCommand = parseCommandPayload(secondFrame.payload);
+
+      expect(firstCommand, isA<DiscreteCommand>());
+      expect((firstCommand as DiscreteCommand).commandId, CommandId.stand);
+      expect(secondCommand, isA<SkillInvokeCommand>());
+      expect((secondCommand as SkillInvokeCommand).actionId, 20593);
 
       await client.dispose();
     });

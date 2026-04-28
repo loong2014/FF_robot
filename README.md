@@ -10,8 +10,8 @@
 | --- | --- | --- |
 | `protocol` | 稳定 | Python / Dart 两套协议实现已对齐，包含帧结构、CRC16、stream decoder、ACK / STATE 编解码，以及 `0x20 skill_invoke`（`do_action` / `do_dog_behavior`）扩展。 |
 | `robot_server` | 可运行 | 已实现 BLE / TCP / MQTT transport、10Hz 状态广播、ROS1 `/cmd_vel` 连续控制桥、ROS skill bridge（`do_action` / `do_dog_behavior`）、ROS 状态采集桥、`.env.example` 和启动脚本；TCP 局域网直连按单控制者模式运行。 |
-| `mobile_sdk` | 可集成 | `RobotClient` 已提供 `connectBLE()` / `connectTCP()` / `connectMQTT()`、`move/stand/sit/stop/doAction/doDogBehavior`、命令队列、ACK 重试、连接状态、BLE 扫描、TCP / BLE / MQTT transport；BLE 客户端基础链路已完成搜索 / 连接 / 数据交互验证。 |
-| `apps/robot_app` | 演示级可用 | 已有 BLE 扫描与连接、按 `Robot` 前缀过滤设备、最近 BLE 设备记忆与启动自动重连、BLE 断线自动重连、TCP / MQTT 连接表单、状态看板、首页快捷动作直控、正式双摇杆遥控页、动作序列编辑与执行，以及语音控制模块入口与 Sherpa `KWS + ASR + VAD` 接入；语音模块当前默认处理 `D-Dog` 唤醒词，并支持中文 / 英文 / 中英混合唤醒别名，仍不是完整的量产 App。 |
+| `mobile_sdk` | 可集成 | `RobotClient` 已提供 `connectBLE()` / `connectTCP()` / `connectMQTT()`、默认 last-wins 控制 API（`move/stand/sit/stop/doAction/doDogBehavior`）、编排 FIFO API（`*Queued`）、命令队列、ACK 重试、连接状态、BLE 扫描、TCP / BLE / MQTT transport；BLE 客户端基础链路已完成搜索 / 连接 / 数据交互验证。 |
+| `apps/robot_app` | 演示级可用 | 已有 BLE 扫描与连接、按 `Robot` 前缀过滤设备、最近 BLE 设备记忆与启动自动重连、BLE 断线自动重连、TCP / MQTT 连接表单、状态看板、首页快捷动作直控、正式双摇杆遥控页、完整动作控制页、动作序列编辑与执行，以及语音控制模块入口与 Sherpa `KWS + ASR + VAD` 接入；手动控制连续点击时只保留最后一个尚未发送的控制命令，图形化编排使用 FIFO 顺序执行；语音模块当前默认处理 `D-Dog` 唤醒词，并支持中文 / 英文 / 中英混合唤醒别名，仍不是完整的量产 App。 |
 | `docs` / `scripts` | 基本齐全 | 已包含 BLE 联调、ROS 状态采集、部署、验收清单等文档，以及 `start_robot_server.sh` 启动脚本。 |
 
 ## 当前已知缺口
@@ -30,6 +30,7 @@ robot_factory/
 ├── mobile_sdk              # Flutter/Dart SDK（RobotClient、transports、队列）
 ├── protocol                # Python + Dart 共享二进制协议
 ├── robot_server            # Ubuntu 20.04 + ROS1 Noetic 机器人端服务
+├── robot_skill             # AlphaDog do_action / do_dog_behavior 资源
 ├── scripts                 # 启动脚本与 smoke 工具
 ├── .env.example            # robot_server 环境变量模板
 ├── prd.md                  # 主需求
@@ -38,7 +39,7 @@ robot_factory/
 
 ## 架构概览
 
-- App 侧通过 `mobile_sdk` 暴露的 `RobotClient` 收敛所有连接和控制入口。
+- App 侧通过 `mobile_sdk` 暴露的 `RobotClient` 收敛所有连接和控制入口；默认控制 API 是 last-wins，图形化编排显式使用 `*Queued` API 保持 FIFO 顺序。
 - `protocol` 负责统一帧格式：`0xAA55 | Type | Seq | Len | Payload | CRC16`。
 - `protocol` 当前保留 `MOVE / STAND / SIT / STOP`，并扩展 `0x20 skill_invoke` 以承载 `do_action` / `do_dog_behavior`。
 - `robot_server` 统一接入 BLE / TCP / MQTT 三种 transport，再通过同一套 parser、`StateStore`、`/cmd_vel` bridge 和 ROS skill bridge 下发或上报。
@@ -119,6 +120,7 @@ Flutter / Dart 侧当前要求满足 `>=3.5.0 <4.0.0`。
 - SDK 入口：[`mobile_sdk/lib/src/robot_client.dart`](mobile_sdk/lib/src/robot_client.dart)
 - App 首页：[`apps/robot_app/lib/src/home_page.dart`](apps/robot_app/lib/src/home_page.dart)
 - App 正式遥控页：[`apps/robot_app/lib/src/control_page.dart`](apps/robot_app/lib/src/control_page.dart)
+- App 完整动作控制页：[`apps/robot_app/lib/src/skill_control_page.dart`](apps/robot_app/lib/src/skill_control_page.dart)
 
 ## 文档索引
 
@@ -126,6 +128,7 @@ Flutter / Dart 侧当前要求满足 `>=3.5.0 <4.0.0`。
 - 现状与优先级：[`docs/backlog.md`](docs/backlog.md)
 - Phase 0 设计：[`docs/phase0_design.md`](docs/phase0_design.md)
 - BLE 控制格式：[`docs/ble_control_data_format.md`](docs/ble_control_data_format.md)
+- 机器狗操控 API：[`docs/robot_control_api.md`](docs/robot_control_api.md)
 - BLE 联调：[`docs/ble_integration.md`](docs/ble_integration.md)
 - ROS 状态采集：[`docs/ros_state_integration.md`](docs/ros_state_integration.md)
 - 部署：[`docs/deploy.md`](docs/deploy.md)

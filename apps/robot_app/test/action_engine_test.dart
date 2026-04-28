@@ -24,12 +24,30 @@ class _FakeRobotClient extends RobotClient {
   }
 
   @override
+  Future<void> standQueued() async {
+    _record('stand');
+    if (blockStand != null) {
+      await blockStand!.future;
+    }
+  }
+
+  @override
   Future<void> sit() async {
     _record('sit');
   }
 
   @override
+  Future<void> sitQueued() async {
+    _record('sit');
+  }
+
+  @override
   Future<void> stop() async {
+    _record('stop');
+  }
+
+  @override
+  Future<void> stopQueued() async {
     _record('stop');
   }
 
@@ -42,12 +60,33 @@ class _FakeRobotClient extends RobotClient {
   }
 
   @override
+  Future<void> moveQueued(double vx, double vy, double yaw) async {
+    _record('move($vx,$vy,$yaw)', key: 'move');
+    if (blockMove != null) {
+      await blockMove!.future;
+    }
+  }
+
+  @override
   Future<void> doAction(int actionId, {bool requireAck = true}) async {
     _record('doAction($actionId)', key: 'doAction');
   }
 
   @override
+  Future<void> doActionQueued(int actionId, {bool requireAck = true}) async {
+    _record('doAction($actionId)', key: 'doAction');
+  }
+
+  @override
   Future<void> doDogBehavior(
+    DogBehavior behavior, {
+    bool requireAck = true,
+  }) async {
+    _record('doDogBehavior(${behavior.displayLabel})', key: 'doDogBehavior');
+  }
+
+  @override
+  Future<void> doDogBehaviorQueued(
     DogBehavior behavior, {
     bool requireAck = true,
   }) async {
