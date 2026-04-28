@@ -7,9 +7,9 @@ Build a Flutter-based voice control system for a robot dog with two core capabil
 
 ## 1. Wake Word Detection (KWS)
 
-* Wake word: "D-Dog"
+* Wake word: "Lumi"
 * The system should continuously listen (low latency, low power)
-* When "D-Dog" is detected:
+* When "Lumi" is detected:
 
   * Wake up the app (bring to foreground if needed)
   * Trigger a callback: onWakeWordDetected()
@@ -126,7 +126,7 @@ Required files inside the copied assets:
 
 * KWS:
   * `encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx`
-  * `decoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx`
+  * `decoder-epoch-13-avg-2-chunk-16-left-64.onnx`
   * `joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx`
   * `tokens.txt`
 * ASR:
@@ -134,6 +134,7 @@ Required files inside the copied assets:
   * `decoder-epoch-99-avg-1.int8.onnx`
   * `joiner-epoch-99-avg-1.int8.onnx`
   * `tokens.txt`
+  * `bpe.model`
 * VAD:
   * `silero_vad.onnx`
 
@@ -146,8 +147,9 @@ Required files inside the copied assets:
 Implement this pipeline:
 
 1. Start background listening
-2. Detect wake word ("D-Dog")
+2. Detect wake word ("Lumi")
 3. Enter "active listening" mode and keep streaming until VAD detects silence
+   * If no command speech is detected within 5 seconds after wake-up, return to wake-word listening
 4. Capture command speech
 5. Recognize command
 6. Emit result to Flutter

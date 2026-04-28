@@ -360,7 +360,7 @@ class _HomePageState extends State<HomePage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
                                 Text(
-                                  '当前语音模块使用 Sherpa 的 KWS + ASR + VAD 双阶段链路，先做 "D-Dog" 唤醒，再持续识别到静音结束，支持中文 / 英文 / 中英混合唤醒别名。',
+                                  '当前语音模块使用 Sherpa 的 KWS + ASR + VAD 双阶段链路，先做 "Lumi" 唤醒，再持续识别到静音结束，支持中文 / 英文 / 中英混合唤醒别名。',
                                   style: Theme.of(context)
                                       .textTheme
                                       .bodySmall

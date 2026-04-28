@@ -18,6 +18,8 @@ abstract class VoiceBackend {
 
   Future<String?> getPlatformVersion();
 
+  Future<bool> ensurePermissions();
+
   Future<void> start({VoiceConfig config = const VoiceConfig()});
 
   Future<void> stop();
@@ -37,7 +39,7 @@ class SherpaVoiceBackend implements VoiceBackend {
 
   static const List<String> _kwsAssetFiles = <String>[
     'encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx',
-    'decoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx',
+    'decoder-epoch-13-avg-2-chunk-16-left-64.onnx',
     'joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx',
     'tokens.txt',
   ];
@@ -47,6 +49,7 @@ class SherpaVoiceBackend implements VoiceBackend {
     'decoder-epoch-99-avg-1.int8.onnx',
     'joiner-epoch-99-avg-1.int8.onnx',
     'tokens.txt',
+    'bpe.model',
   ];
 
   final VoiceControlSdkPlatform _platform;
@@ -71,7 +74,8 @@ class SherpaVoiceBackend implements VoiceBackend {
   DateTime _wakeDebounceUntil =
       DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
   Duration _silenceDuration = Duration.zero;
-  DateTime _activeStartedAt = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  DateTime _activeStartedAt =
+      DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
 
   KeywordSpotter? _keywordSpotter;
   OnlineRecognizer? _asrRecognizer;
@@ -90,6 +94,11 @@ class SherpaVoiceBackend implements VoiceBackend {
   @override
   Future<String?> getPlatformVersion() async {
     return 'sherpa';
+  }
+
+  @override
+  Future<bool> ensurePermissions() {
+    return _platform.ensurePermissions();
   }
 
   @override
@@ -276,9 +285,9 @@ class SherpaVoiceBackend implements VoiceBackend {
             numThreads: 2,
             provider: 'cpu',
             debug: false,
-            modelType: 'zipformer2',
+            modelType: 'zipformer',
             modelingUnit: 'bpe',
-            bpeVocab: '',
+            bpeVocab: paths.asrBpeVocabPath,
           ),
           decodingMethod: 'greedy_search',
           maxActivePaths: 4,
@@ -380,7 +389,7 @@ class SherpaVoiceBackend implements VoiceBackend {
       ),
       kwsDecoderPath: p.join(
         kwsDir.path,
-        'decoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx',
+        'decoder-epoch-13-avg-2-chunk-16-left-64.onnx',
       ),
       kwsJoinerPath: p.join(
         kwsDir.path,
@@ -398,6 +407,7 @@ class SherpaVoiceBackend implements VoiceBackend {
         'joiner-epoch-99-avg-1.int8.onnx',
       ),
       asrTokensPath: p.join(asrDir.path, 'tokens.txt'),
+      asrBpeVocabPath: p.join(asrDir.path, 'bpe.model'),
       vadModelPath: p.join(vadDir.path, 'silero_vad.onnx'),
     );
   }
@@ -513,8 +523,7 @@ class SherpaVoiceBackend implements VoiceBackend {
         continue;
       }
 
-      _wakeDebounceUntil =
-          DateTime.now().toUtc().add(_config.wakeDebounce);
+      _wakeDebounceUntil = DateTime.now().toUtc().add(_config.wakeDebounce);
       _emitWake(match);
       _startActiveSession();
       return;
@@ -568,7 +577,14 @@ class SherpaVoiceBackend implements VoiceBackend {
     _vad!.acceptWaveform(chunk.samples);
 
     final bool detected = _vad!.isDetected();
-    if (detected) {
+    final Duration activeDuration =
+        DateTime.now().toUtc().difference(_activeStartedAt);
+    final bool commandSpeechArmed =
+        activeDuration >= const Duration(milliseconds: 600);
+    final bool noSpeechTimedOut =
+        activeDuration >= _config.activeNoSpeechTimeout;
+
+    if (detected && commandSpeechArmed) {
       _speechDetected = true;
       _silenceDuration = Duration.zero;
     } else if (_speechDetected) {
@@ -580,9 +596,8 @@ class SherpaVoiceBackend implements VoiceBackend {
       _emitPartialAsr();
     }
 
-    final Duration activeDuration =
-        DateTime.now().toUtc().difference(_activeStartedAt);
-    if ((_speechDetected && _silenceDuration >= _config.vadSilence) ||
+    if ((!_speechDetected && noSpeechTimedOut) ||
+        (_speechDetected && _silenceDuration >= _config.vadSilence) ||
         activeDuration >= _config.maxActiveDuration) {
       _finishActiveSession();
     }
@@ -592,7 +607,8 @@ class SherpaVoiceBackend implements VoiceBackend {
     if (_asrRecognizer == null || _asrStream == null) {
       return;
     }
-    final OnlineRecognizerResult result = _asrRecognizer!.getResult(_asrStream!);
+    final OnlineRecognizerResult result =
+        _asrRecognizer!.getResult(_asrStream!);
     final String text = result.text.trim();
     if (text.isEmpty || text == _lastAsrText) {
       return;
@@ -626,7 +642,8 @@ class SherpaVoiceBackend implements VoiceBackend {
     while (_asrRecognizer!.isReady(_asrStream!)) {
       _asrRecognizer!.decode(_asrStream!);
     }
-    final OnlineRecognizerResult result = _asrRecognizer!.getResult(_asrStream!);
+    final OnlineRecognizerResult result =
+        _asrRecognizer!.getResult(_asrStream!);
     final String transcript = result.text.trim();
     if (transcript.isNotEmpty && transcript != _lastFinalAsrText) {
       _lastFinalAsrText = transcript;
@@ -648,7 +665,8 @@ class SherpaVoiceBackend implements VoiceBackend {
         ),
       );
 
-      final VoiceCommandMatch? commandMatch = VoiceCommandMapper.matchTranscript(
+      final VoiceCommandMatch? commandMatch =
+          VoiceCommandMapper.matchTranscript(
         transcript,
         confidence: 1.0,
         bilingualCommands: true,
@@ -731,7 +749,8 @@ class SherpaVoiceBackend implements VoiceBackend {
         event['pcm16le'] ??
         event['pcm_f32le'];
     if (samplesValue is! Uint8List) {
-      return _AudioChunk(samples: Float32List(0), sampleRate: _config.sampleRate);
+      return _AudioChunk(
+          samples: Float32List(0), sampleRate: _config.sampleRate);
     }
 
     final int sampleRate =
@@ -743,7 +762,8 @@ class SherpaVoiceBackend implements VoiceBackend {
         samplesValue.offsetInBytes,
         samplesValue.lengthInBytes ~/ 4,
       );
-      return _AudioChunk(samples: Float32List.fromList(samples), sampleRate: sampleRate);
+      return _AudioChunk(
+          samples: Float32List.fromList(samples), sampleRate: sampleRate);
     }
 
     final ByteData data = ByteData.sublistView(samplesValue);
@@ -921,6 +941,7 @@ class _SherpaModelPaths {
     required this.asrDecoderPath,
     required this.asrJoinerPath,
     required this.asrTokensPath,
+    required this.asrBpeVocabPath,
     required this.vadModelPath,
   });
 
@@ -933,5 +954,6 @@ class _SherpaModelPaths {
   final String asrDecoderPath;
   final String asrJoinerPath;
   final String asrTokensPath;
+  final String asrBpeVocabPath;
   final String vadModelPath;
 }

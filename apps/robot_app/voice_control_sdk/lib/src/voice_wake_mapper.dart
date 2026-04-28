@@ -62,7 +62,8 @@ class VoiceWakeMapper {
       if (alias.resultLabel == resultLabel) {
         return alias.toMatch(
           wakeWord: wakeWord,
-          normalizedText: VoiceCommandMapper.normalizeTranscript(alias.displayAlias),
+          normalizedText:
+              VoiceCommandMapper.normalizeTranscript(alias.displayAlias),
           confidence: confidence,
         );
       }
@@ -84,7 +85,7 @@ class VoiceWakeMapper {
         _buildWakeAliases(wakeWord: wakeWord, modelLanguage: modelLanguage);
     final buffer = StringBuffer();
     for (final alias in aliases) {
-      final tokens = _tokenizeForKws(alias.displayAlias);
+      final tokens = alias.kwsTokens;
       if (tokens.isEmpty) {
         continue;
       }
@@ -116,6 +117,11 @@ class VoiceWakeMapper {
       normalized: normalized,
       compact: compact,
     );
+    final bool looksLikeLumi = _looksLikeLumiWakeWord(
+      wakeWord: wakeWord,
+      normalized: normalized,
+      compact: compact,
+    );
 
     void addAlias(String value, VoiceLanguage language, String resultLabel) {
       final String normalizedAlias =
@@ -129,49 +135,112 @@ class VoiceWakeMapper {
           normalizedAlias: normalizedAlias,
           language: language,
           resultLabel: resultLabel,
+          kwsTokens: _tokenizeForKws(value),
         ),
       );
     }
 
     addAlias(wakeWord, VoiceLanguage.unknown, _resultLabel(wakeWord, 'base'));
-    addAlias(normalized, VoiceLanguage.unknown, _resultLabel(wakeWord, 'base2'));
+    addAlias(
+        normalized, VoiceLanguage.unknown, _resultLabel(wakeWord, 'base2'));
     addAlias(compact, VoiceLanguage.unknown, _resultLabel(wakeWord, 'base3'));
 
-    if (!looksLikeDdog) {
+    if (!looksLikeDdog && !looksLikeLumi) {
+      return aliases.toList(growable: false);
+    }
+
+    if (looksLikeLumi) {
+      final List<_WakeAlias> english = <_WakeAlias>[
+        _wakeAlias(wakeWord, 'Lumi', 'lumi', VoiceLanguage.en, 'en_main',
+            'L UW1 M IY0'),
+        _wakeAlias(wakeWord, 'lumi', 'lumi', VoiceLanguage.en, 'en_lower',
+            'L UW1 M IY0'),
+        _wakeAlias(wakeWord, 'loo me', 'loo me', VoiceLanguage.en, 'en_loome',
+            'L UW1 M IY0'),
+        _wakeAlias(wakeWord, 'lu mi', 'lu mi', VoiceLanguage.en, 'en_lumi',
+            'L UW1 M IY0'),
+      ];
+
+      final List<_WakeAlias> chinese = <_WakeAlias>[
+        _wakeAlias(wakeWord, '露米', '露米', VoiceLanguage.zh, 'zh_lu4', 'l ù m ǐ'),
+        _wakeAlias(
+            wakeWord, '路米', '路米', VoiceLanguage.zh, 'zh_lu4_2', 'l ù m ǐ'),
+        _wakeAlias(wakeWord, '卢米', '卢米', VoiceLanguage.zh, 'zh_lu2', 'l ú m ǐ'),
+        _wakeAlias(
+            wakeWord, '鲁米', '鲁米', VoiceLanguage.zh, 'zh_lu2_2', 'l ú m ǐ'),
+        _wakeAlias(
+            wakeWord, '噜米', '噜米', VoiceLanguage.zh, 'zh_lu2_3', 'l ú m ǐ'),
+        _wakeAlias(wakeWord, 'lu mi', 'lu mi', VoiceLanguage.zh, 'zh_lu_mi',
+            'l ù m ǐ'),
+      ];
+
+      switch (modelLanguage) {
+        case VoiceLanguage.en:
+          aliases.addAll(english);
+          aliases.add(_wakeAlias(
+              wakeWord, '露米', '露米', VoiceLanguage.zh, 'zh_lu4', 'l ù m ǐ'));
+          aliases.add(_wakeAlias(
+              wakeWord, '卢米', '卢米', VoiceLanguage.zh, 'zh_lu2', 'l ú m ǐ'));
+          break;
+        case VoiceLanguage.zh:
+          aliases.addAll(chinese);
+          aliases.add(_wakeAlias(wakeWord, 'Lumi', 'lumi', VoiceLanguage.en,
+              'en_main', 'L UW1 M IY0'));
+          break;
+        case VoiceLanguage.mixed:
+        case VoiceLanguage.unknown:
+          aliases.addAll(english);
+          aliases.addAll(chinese);
+          break;
+      }
+
       return aliases.toList(growable: false);
     }
 
     final List<_WakeAlias> english = <_WakeAlias>[
-      _wakeAlias(wakeWord, 'D-Dog', 'd dog', VoiceLanguage.en, 'en_main'),
-      _wakeAlias(wakeWord, 'D Dog', 'd dog', VoiceLanguage.en, 'en_spaced'),
-      _wakeAlias(wakeWord, 'd dog', 'd dog', VoiceLanguage.en, 'en_lower'),
-      _wakeAlias(wakeWord, 'd-dog', 'd dog', VoiceLanguage.en, 'en_hyphen'),
-      _wakeAlias(wakeWord, 'dee dog', 'dee dog', VoiceLanguage.en, 'en_dee'),
+      _wakeAlias(wakeWord, 'D-Dog', 'd dog', VoiceLanguage.en, 'en_main',
+          'D IY1 D AO1 G'),
+      _wakeAlias(wakeWord, 'D Dog', 'd dog', VoiceLanguage.en, 'en_spaced',
+          'D IY1 D AO1 G'),
+      _wakeAlias(wakeWord, 'd dog', 'd dog', VoiceLanguage.en, 'en_lower',
+          'D IY1 D AO1 G'),
+      _wakeAlias(wakeWord, 'd-dog', 'd dog', VoiceLanguage.en, 'en_hyphen',
+          'D IY1 D AO1 G'),
+      _wakeAlias(wakeWord, 'dee dog', 'dee dog', VoiceLanguage.en, 'en_dee',
+          'D IY1 D AO1 G'),
     ];
 
     final List<_WakeAlias> chinese = <_WakeAlias>[
-      _wakeAlias(wakeWord, '迪狗', '迪狗', VoiceLanguage.zh, 'zh_di'),
-      _wakeAlias(wakeWord, '滴狗', '滴狗', VoiceLanguage.zh, 'zh_di2'),
-      _wakeAlias(wakeWord, '嘀狗', '嘀狗', VoiceLanguage.zh, 'zh_di3'),
-      _wakeAlias(wakeWord, '帝狗', '帝狗', VoiceLanguage.zh, 'zh_di4'),
-      _wakeAlias(wakeWord, '弟狗', '弟狗', VoiceLanguage.zh, 'zh_di5'),
-      _wakeAlias(wakeWord, '地狗', '地狗', VoiceLanguage.zh, 'zh_di6'),
-      _wakeAlias(wakeWord, 'd狗', 'd狗', VoiceLanguage.zh, 'zh_dog'),
-      _wakeAlias(wakeWord, 'di gou', 'di gou', VoiceLanguage.zh, 'zh_di_gou'),
-      _wakeAlias(wakeWord, 'di-dog', 'di dog', VoiceLanguage.zh, 'zh_di_dog'),
-      _wakeAlias(wakeWord, 'di dog', 'di dog', VoiceLanguage.zh, 'zh_di_dog2'),
+      _wakeAlias(wakeWord, '迪狗', '迪狗', VoiceLanguage.zh, 'zh_di', 'd ī g ǒu'),
+      _wakeAlias(wakeWord, '滴狗', '滴狗', VoiceLanguage.zh, 'zh_di2', 'd ī g ǒu'),
+      _wakeAlias(wakeWord, '嘀狗', '嘀狗', VoiceLanguage.zh, 'zh_di3', 'd ī g ǒu'),
+      _wakeAlias(wakeWord, '帝狗', '帝狗', VoiceLanguage.zh, 'zh_di4', 'd ì g ǒu'),
+      _wakeAlias(wakeWord, '弟狗', '弟狗', VoiceLanguage.zh, 'zh_di5', 'd ì g ǒu'),
+      _wakeAlias(wakeWord, '地狗', '地狗', VoiceLanguage.zh, 'zh_di6', 'd ì g ǒu'),
+      _wakeAlias(
+          wakeWord, 'd狗', 'd狗', VoiceLanguage.zh, 'zh_dog', 'D IY1 g ǒu'),
+      _wakeAlias(wakeWord, 'di gou', 'di gou', VoiceLanguage.zh, 'zh_di_gou',
+          'd ī g ǒu'),
+      _wakeAlias(wakeWord, 'di-dog', 'di dog', VoiceLanguage.zh, 'zh_di_dog',
+          'd ī D AO1 G'),
+      _wakeAlias(wakeWord, 'di dog', 'di dog', VoiceLanguage.zh, 'zh_di_dog2',
+          'd ī D AO1 G'),
     ];
 
     switch (modelLanguage) {
       case VoiceLanguage.en:
         aliases.addAll(english);
-        aliases.add(_wakeAlias(wakeWord, '迪狗', '迪狗', VoiceLanguage.zh, 'zh_di'));
-        aliases.add(_wakeAlias(wakeWord, '滴狗', '滴狗', VoiceLanguage.zh, 'zh_di2'));
+        aliases.add(_wakeAlias(
+            wakeWord, '迪狗', '迪狗', VoiceLanguage.zh, 'zh_di', 'd ī g ǒu'));
+        aliases.add(_wakeAlias(
+            wakeWord, '滴狗', '滴狗', VoiceLanguage.zh, 'zh_di2', 'd ī g ǒu'));
         break;
       case VoiceLanguage.zh:
         aliases.addAll(chinese);
-        aliases.add(_wakeAlias(wakeWord, 'D-Dog', 'd dog', VoiceLanguage.en, 'en_main'));
-        aliases.add(_wakeAlias(wakeWord, 'D Dog', 'd dog', VoiceLanguage.en, 'en_spaced'));
+        aliases.add(_wakeAlias(wakeWord, 'D-Dog', 'd dog', VoiceLanguage.en,
+            'en_main', 'D IY1 D AO1 G'));
+        aliases.add(_wakeAlias(wakeWord, 'D Dog', 'd dog', VoiceLanguage.en,
+            'en_spaced', 'D IY1 D AO1 G'));
         break;
       case VoiceLanguage.mixed:
       case VoiceLanguage.unknown:
@@ -189,12 +258,14 @@ class VoiceWakeMapper {
     String normalizedAlias,
     VoiceLanguage language,
     String suffix,
+    String kwsTokens,
   ) {
     return _WakeAlias(
       displayAlias: displayAlias,
       normalizedAlias: normalizedAlias,
       language: language,
       resultLabel: _resultLabel(wakeWord, suffix),
+      kwsTokens: kwsTokens,
     );
   }
 
@@ -221,6 +292,25 @@ class VoiceWakeMapper {
         lowerWakeWord == 'd-dog' ||
         lowerWakeWord == 'd dog' ||
         lowerWakeWord == 'dee dog';
+  }
+
+  static bool _looksLikeLumiWakeWord({
+    required String wakeWord,
+    required String normalized,
+    required String compact,
+  }) {
+    if (wakeWord == 'Lumi') {
+      return true;
+    }
+
+    final String lowerWakeWord = wakeWord.toLowerCase().trim();
+    return compact == 'lumi' ||
+        compact == 'loome' ||
+        normalized == 'lu mi' ||
+        normalized == 'loo me' ||
+        lowerWakeWord == 'lumi' ||
+        lowerWakeWord == 'lu mi' ||
+        lowerWakeWord == 'loo me';
   }
 
   static bool _matchesAlias({
@@ -308,12 +398,14 @@ class _WakeAlias {
     required this.normalizedAlias,
     required this.language,
     required this.resultLabel,
+    required this.kwsTokens,
   });
 
   final String displayAlias;
   final String normalizedAlias;
   final VoiceLanguage language;
   final String resultLabel;
+  final String kwsTokens;
 
   VoiceWakeMatch toMatch({
     required String wakeWord,
@@ -336,10 +428,11 @@ class _WakeAlias {
         other.displayAlias == displayAlias &&
         other.normalizedAlias == normalizedAlias &&
         other.language == language &&
-        other.resultLabel == resultLabel;
+        other.resultLabel == resultLabel &&
+        other.kwsTokens == kwsTokens;
   }
 
   @override
-  int get hashCode =>
-      Object.hash(displayAlias, normalizedAlias, language, resultLabel);
+  int get hashCode => Object.hash(
+      displayAlias, normalizedAlias, language, resultLabel, kwsTokens);
 }

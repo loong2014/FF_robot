@@ -21,6 +21,10 @@ abstract class VoiceControlSdkPlatform extends PlatformInterface {
     throw UnimplementedError('getPlatformVersion() has not been implemented.');
   }
 
+  Future<bool> ensurePermissions() {
+    throw UnimplementedError('ensurePermissions() has not been implemented.');
+  }
+
   Future<void> startListening({
     VoiceConfig config = const VoiceConfig(),
   }) {

@@ -14,13 +14,16 @@ class BleScanPage extends StatefulWidget {
 
 class _BleScanPageState extends State<BleScanPage> {
   static const Duration _scanTimeout = Duration(seconds: 8);
+  static const Duration _emptyHintDelay = Duration(seconds: 10);
   static const String _robotDevicePrefix = 'Robot';
 
   final Map<String, BleDiscoveredDevice> _devices =
       <String, BleDiscoveredDevice>{};
 
   StreamSubscription<BleDiscoveredDevice>? _scanSubscription;
+  Timer? _emptyHintTimer;
   bool _isScanning = false;
+  bool _shouldShowEmptyHint = false;
   Object? _lastError;
 
   @override
@@ -32,6 +35,7 @@ class _BleScanPageState extends State<BleScanPage> {
   @override
   void dispose() {
     unawaited(_scanSubscription?.cancel());
+    _emptyHintTimer?.cancel();
     super.dispose();
   }
 
@@ -49,6 +53,7 @@ class _BleScanPageState extends State<BleScanPage> {
 
   Future<void> _startScan() async {
     await _scanSubscription?.cancel();
+    _emptyHintTimer?.cancel();
     if (!mounted) {
       return;
     }
@@ -57,6 +62,16 @@ class _BleScanPageState extends State<BleScanPage> {
       _devices.clear();
       _lastError = null;
       _isScanning = true;
+      _shouldShowEmptyHint = false;
+    });
+
+    _emptyHintTimer = Timer(_emptyHintDelay, () {
+      if (!mounted || _devices.isNotEmpty) {
+        return;
+      }
+      setState(() {
+        _shouldShowEmptyHint = true;
+      });
     });
 
     _scanSubscription = widget.client.scanBLE(timeout: _scanTimeout).listen(
@@ -138,9 +153,13 @@ class _BleScanPageState extends State<BleScanPage> {
             ),
           Expanded(
             child: devices.isEmpty
-                ? const Center(
-                    child: Text('暂无以 Robot 开头的可连接设备，请确认机器人已开启 BLE 广播。'),
-                  )
+                ? _shouldShowEmptyHint
+                    ? const Center(
+                        child: Text(
+                          '暂无以 Robot 开头的可连接设备，请确认机器人已开启 BLE 广播。',
+                        ),
+                      )
+                    : const SizedBox.shrink()
                 : ListView.separated(
                     itemCount: devices.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),

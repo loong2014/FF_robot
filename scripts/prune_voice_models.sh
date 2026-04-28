@@ -22,8 +22,8 @@ Environment overrides:
   VAD_FILE            VAD onnx file path
 
 The script keeps only the minimal publish set:
-  KWS: encoder/decoder/joiner int8 + tokens.txt
-  ASR: encoder/decoder/joiner int8 + tokens.txt
+  KWS: encoder/joiner int8 + official decoder + tokens.txt
+  ASR: encoder/decoder/joiner int8 + tokens.txt + bpe.model
   VAD: silero_vad.onnx
 EOF
 }
@@ -88,7 +88,7 @@ done
 
 prune_directory "$KWS_DIR" \
   encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx \
-  decoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx \
+  decoder-epoch-13-avg-2-chunk-16-left-64.onnx \
   joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx \
   tokens.txt
 
@@ -96,7 +96,8 @@ prune_directory "$ASR_DIR" \
   encoder-epoch-99-avg-1.int8.onnx \
   decoder-epoch-99-avg-1.int8.onnx \
   joiner-epoch-99-avg-1.int8.onnx \
-  tokens.txt
+  tokens.txt \
+  bpe.model
 
 if [[ ! -f "$VAD_FILE" ]]; then
   echo "Missing VAD file: $VAD_FILE" >&2
@@ -108,4 +109,3 @@ log "Kept:"
 log "  KWS: $KWS_DIR"
 log "  ASR: $ASR_DIR"
 log "  VAD: $VAD_FILE"
-

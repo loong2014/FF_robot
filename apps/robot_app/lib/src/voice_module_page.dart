@@ -14,7 +14,7 @@ class VoiceModulePage extends StatefulWidget {
 class _VoiceModulePageState extends State<VoiceModulePage> {
   final VoiceController _voiceController = VoiceController();
   final TextEditingController _wakeWordController =
-      TextEditingController(text: 'D-Dog');
+      TextEditingController(text: 'Lumi');
 
   StreamSubscription<VoiceEvent>? _eventSubscription;
 
@@ -56,9 +56,21 @@ class _VoiceModulePageState extends State<VoiceModulePage> {
       return;
     }
 
+    final bool hasPermissions = await _voiceController.ensurePermissions();
+    if (!hasPermissions) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _statusMessage = '请先允许麦克风权限；Android 13+ 还需要允许通知权限';
+        _listening = false;
+      });
+      return;
+    }
+
     final config = VoiceConfig(
       wakeWord: _wakeWordController.text.trim().isEmpty
-          ? 'D-Dog'
+          ? 'Lumi'
           : _wakeWordController.text.trim(),
       sensitivity: _sensitivity,
       wakeDebounce: _wakeDebounce,
@@ -142,7 +154,8 @@ class _VoiceModulePageState extends State<VoiceModulePage> {
         _statusMessage = '唤醒词: ${event.wakeWord}';
       } else if (event is VoiceAsrEvent) {
         _latestAsr = event;
-        _statusMessage = event.isFinal ? '识别完成: ${event.text}' : '识别中: ${event.text}';
+        _statusMessage =
+            event.isFinal ? '识别完成: ${event.text}' : '识别中: ${event.text}';
       } else if (event is VoiceErrorEvent) {
         _latestError = event;
         _statusMessage = event.recoveryHint;
@@ -179,7 +192,7 @@ class _VoiceModulePageState extends State<VoiceModulePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      '先手动启动监听，再说唤醒词 "D-Dog"。当前版本使用 Sherpa 的 KWS + ASR + VAD 双阶段链路：先唤醒，再持续识别到静音结束。Android 侧使用前台监听，iOS 仅前台可用。',
+                      '先手动启动监听，再说唤醒词 "Lumi"。当前版本使用 Sherpa 的 KWS + ASR + VAD 双阶段链路：先唤醒，再持续识别到静音结束。Android 侧使用前台监听，iOS 仅前台可用。',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: const Color(0xFF4B6B66),
                           ),
@@ -388,7 +401,7 @@ class _VoiceModulePageState extends State<VoiceModulePage> {
     } else if (!_listening) {
       parts.add('当前未监听，点“开始监听”即可进入待唤醒状态');
     } else {
-      parts.add('正在等待唤醒词 D-Dog');
+      parts.add('正在等待唤醒词 Lumi');
     }
     if (parts.isEmpty) {
       return null;
@@ -568,7 +581,7 @@ class _SettingsCard extends StatelessWidget {
             controller: wakeWordController,
             decoration: const InputDecoration(
               labelText: '唤醒词',
-              hintText: 'D-Dog',
+              hintText: 'Lumi',
             ),
           ),
           const SizedBox(height: 16),

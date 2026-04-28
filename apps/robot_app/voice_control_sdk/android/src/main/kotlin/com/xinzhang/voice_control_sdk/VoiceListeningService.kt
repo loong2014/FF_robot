@@ -43,6 +43,12 @@ internal class VoiceListeningService : Service() {
             }
             ACTION_START, null -> {
                 currentConfig = VoiceConfig.fromBundle(intent?.extras)
+                listening = true
+                startForegroundWithState(
+                    state = "starting",
+                    message = "正在启动麦克风采集",
+                    useMicrophoneType = hasAudioPermission(),
+                )
                 if (!hasAudioPermission()) {
                     VoiceEventHub.emitError(
                         code = "microphone_permission_denied",
@@ -54,11 +60,11 @@ internal class VoiceListeningService : Service() {
                         listening = false,
                         activeListening = false,
                     )
+                    listening = false
+                    stopForegroundCompat()
                     stopSelf()
                     return START_NOT_STICKY
                 }
-                listening = true
-                startForegroundWithState("starting", "正在启动麦克风采集")
                 startCapture()
                 return START_STICKY
             }
@@ -242,15 +248,13 @@ internal class VoiceListeningService : Service() {
         }
     }
 
-    private fun startForegroundWithState(state: String, message: String) {
-        VoiceEventHub.emitState(
-            state = state,
-            message = message,
-            listening = true,
-            activeListening = false,
-        )
+    private fun startForegroundWithState(
+        state: String,
+        message: String,
+        useMicrophoneType: Boolean = true,
+    ) {
         val notification = buildNotification(message)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && useMicrophoneType) {
             startForeground(
                 NOTIFICATION_ID,
                 notification,
@@ -259,6 +263,12 @@ internal class VoiceListeningService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+        VoiceEventHub.emitState(
+            state = state,
+            message = message,
+            listening = true,
+            activeListening = false,
+        )
     }
 
     private fun buildNotification(contentText: String): Notification {

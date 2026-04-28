@@ -26,6 +26,10 @@ class VoiceController {
     return _backend.getPlatformVersion();
   }
 
+  Future<bool> ensurePermissions() {
+    return _backend.ensurePermissions();
+  }
+
   Future<void> startListening({
     VoiceConfig config = const VoiceConfig(),
   }) {

@@ -266,12 +266,12 @@ class VoiceWakeEvent extends VoiceEvent {
     return VoiceWakeEvent(
       timestamp: voiceTimestampFromMap(map),
       source: voiceEventSourceFromWire(map['source'] as String?),
-      wakeWord: (map['wakeWord'] ?? map['wake_word'] ?? 'D-Dog').toString(),
+      wakeWord: (map['wakeWord'] ?? map['wake_word'] ?? 'Lumi').toString(),
       recognizedText: (map['recognizedText'] ??
               map['recognized_text'] ??
               map['wakeWord'] ??
               map['wake_word'] ??
-              'D-Dog')
+              'Lumi')
           .toString(),
       resultLabel: (map['resultLabel'] ?? map['result_label'] ?? '').toString(),
       language: voiceLanguageFromWire(map['language'] as String?),
@@ -491,13 +491,14 @@ class VoiceTelemetryEvent extends VoiceEvent {
 class VoiceConfig {
   const VoiceConfig({
     this.engine = VoiceEngineType.sherpa,
-    this.wakeWord = 'D-Dog',
+    this.wakeWord = 'Lumi',
     this.sensitivity = 0.65,
     this.wakeDebounce = const Duration(milliseconds: 1200),
     this.modelLanguage = VoiceLanguage.mixed,
     this.sampleRate = 16000,
     this.preRoll = const Duration(milliseconds: 500),
     this.vadSilence = const Duration(milliseconds: 700),
+    this.activeNoSpeechTimeout = const Duration(seconds: 5),
     this.maxActiveDuration = const Duration(seconds: 8),
     this.kwsAssetBasePath =
         'packages/voice_control_sdk/assets/voice_models/kws/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20',
@@ -516,6 +517,7 @@ class VoiceConfig {
   final int sampleRate;
   final Duration preRoll;
   final Duration vadSilence;
+  final Duration activeNoSpeechTimeout;
   final Duration maxActiveDuration;
   final String kwsAssetBasePath;
   final String asrAssetBasePath;
@@ -532,6 +534,7 @@ class VoiceConfig {
       'sampleRate': sampleRate,
       'preRollMs': preRoll.inMilliseconds,
       'vadSilenceMs': vadSilence.inMilliseconds,
+      'activeNoSpeechTimeoutMs': activeNoSpeechTimeout.inMilliseconds,
       'maxActiveDurationMs': maxActiveDuration.inMilliseconds,
       'kwsAssetBasePath': kwsAssetBasePath,
       'asrAssetBasePath': asrAssetBasePath,
@@ -543,7 +546,7 @@ class VoiceConfig {
   factory VoiceConfig.fromMap(Map<String, Object?> map) {
     return VoiceConfig(
       engine: voiceEngineTypeFromWire(map['engine'] as String?),
-      wakeWord: (map['wakeWord'] ?? map['wake_word'] ?? 'D-Dog').toString(),
+      wakeWord: (map['wakeWord'] ?? map['wake_word'] ?? 'Lumi').toString(),
       sensitivity: _readDouble(map, 'sensitivity', fallback: 0.65),
       wakeDebounce: Duration(
         milliseconds: _readInt(map, 'wakeDebounceMs', fallback: 1200),
@@ -552,9 +555,13 @@ class VoiceConfig {
         map['modelLanguage'] as String? ?? map['language'] as String?,
       ),
       sampleRate: _readInt(map, 'sampleRate', fallback: 16000),
-      preRoll: Duration(milliseconds: _readInt(map, 'preRollMs', fallback: 500)),
+      preRoll:
+          Duration(milliseconds: _readInt(map, 'preRollMs', fallback: 500)),
       vadSilence:
           Duration(milliseconds: _readInt(map, 'vadSilenceMs', fallback: 700)),
+      activeNoSpeechTimeout: Duration(
+        milliseconds: _readInt(map, 'activeNoSpeechTimeoutMs', fallback: 5000),
+      ),
       maxActiveDuration: Duration(
         milliseconds: _readInt(map, 'maxActiveDurationMs', fallback: 8000),
       ),
@@ -586,6 +593,7 @@ class VoiceConfig {
     int? sampleRate,
     Duration? preRoll,
     Duration? vadSilence,
+    Duration? activeNoSpeechTimeout,
     Duration? maxActiveDuration,
     String? kwsAssetBasePath,
     String? asrAssetBasePath,
@@ -601,6 +609,8 @@ class VoiceConfig {
       sampleRate: sampleRate ?? this.sampleRate,
       preRoll: preRoll ?? this.preRoll,
       vadSilence: vadSilence ?? this.vadSilence,
+      activeNoSpeechTimeout:
+          activeNoSpeechTimeout ?? this.activeNoSpeechTimeout,
       maxActiveDuration: maxActiveDuration ?? this.maxActiveDuration,
       kwsAssetBasePath: kwsAssetBasePath ?? this.kwsAssetBasePath,
       asrAssetBasePath: asrAssetBasePath ?? this.asrAssetBasePath,

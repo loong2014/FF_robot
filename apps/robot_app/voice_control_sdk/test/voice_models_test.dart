@@ -5,7 +5,6 @@ void main() {
   group('VoiceConfig', () {
     test('defaults to Sherpa mixed wake and round-trips asset fields', () {
       const config = VoiceConfig(
-        wakeWord: 'D-Dog',
         modelLanguage: VoiceLanguage.mixed,
         kwsAssetBasePath:
             'packages/voice_control_sdk/assets/voice_models/kws/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20',
@@ -17,13 +16,14 @@ void main() {
 
       expect(config.engine, VoiceEngineType.sherpa);
       expect(config.sampleRate, 16000);
-      expect(config.wakeWord, 'D-Dog');
+      expect(config.wakeWord, 'Lumi');
       expect(config.preRoll.inMilliseconds, 500);
       expect(config.vadSilence.inMilliseconds, 700);
+      expect(config.activeNoSpeechTimeout.inSeconds, 5);
 
       final roundTrip = VoiceConfig.fromMap(config.toMap());
       expect(roundTrip.engine, VoiceEngineType.sherpa);
-      expect(roundTrip.wakeWord, 'D-Dog');
+      expect(roundTrip.wakeWord, 'Lumi');
       expect(roundTrip.modelLanguage, VoiceLanguage.mixed);
       expect(
         roundTrip.kwsAssetBasePath,
@@ -38,6 +38,7 @@ void main() {
         'packages/voice_control_sdk/assets/voice_models/vad/silero_vad.onnx',
       );
       expect(roundTrip.sampleRate, 16000);
+      expect(roundTrip.activeNoSpeechTimeout.inSeconds, 5);
     });
   });
 
@@ -45,18 +46,18 @@ void main() {
     test('round-trips recognized wake metadata', () {
       final event = VoiceWakeEvent.fromMap(<String, Object?>{
         'type': 'wake',
-        'wakeWord': 'D-Dog',
-        'recognizedText': '滴狗',
-        'resultLabel': 'd_dog__zh_di2',
+        'wakeWord': 'Lumi',
+        'recognizedText': '露米',
+        'resultLabel': 'lumi__zh_lu4',
         'language': 'zh',
         'confidence': 0.91,
         'source': 'android',
         'timestampMs': 1710000000000,
       });
 
-      expect(event.wakeWord, 'D-Dog');
-      expect(event.recognizedText, '滴狗');
-      expect(event.resultLabel, 'd_dog__zh_di2');
+      expect(event.wakeWord, 'Lumi');
+      expect(event.recognizedText, '露米');
+      expect(event.resultLabel, 'lumi__zh_lu4');
       expect(event.language, VoiceLanguage.zh);
       expect(event.confidence, 0.91);
       expect(event.source, VoiceEventSource.android);

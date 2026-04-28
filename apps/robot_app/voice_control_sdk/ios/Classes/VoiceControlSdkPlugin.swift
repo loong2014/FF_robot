@@ -1,3 +1,4 @@
+import AVFoundation
 import Flutter
 import UIKit
 
@@ -28,6 +29,8 @@ public class VoiceControlSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandle
     switch call.method {
     case "getPlatformVersion":
       result("iOS \(UIDevice.current.systemVersion)")
+    case "ensurePermissions":
+      ensurePermissions(result: result)
     case "startListening":
       startListening(arguments: call.arguments, result: result)
     case "stopListening":
@@ -58,6 +61,23 @@ public class VoiceControlSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandle
     }
     coordinator?.start(config: config)
     result(nil)
+  }
+
+  private func ensurePermissions(result: @escaping FlutterResult) {
+    switch AVAudioSession.sharedInstance().recordPermission {
+    case .granted:
+      result(true)
+    case .denied:
+      result(false)
+    case .undetermined:
+      AVAudioSession.sharedInstance().requestRecordPermission { granted in
+        DispatchQueue.main.async {
+          result(granted)
+        }
+      }
+    @unknown default:
+      result(false)
+    }
   }
 
   private func emitEvent(_ payload: [String: Any]) {

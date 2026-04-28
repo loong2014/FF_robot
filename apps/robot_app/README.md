@@ -15,7 +15,7 @@
 - 首页快捷动作直控（stand / sit / stop / 常用 dog behavior）
 - 完整动作控制页展示连接状态、电量、姿态，以及全部动作 / 行为列表；点击后通过 `RobotClient.doAction` / `RobotClient.doDogBehavior` 下发
 - 手动控制页与首页快捷控制使用 `RobotClient` 默认实时语义，连续点击时只保留最后一个尚未发送的控制命令
-- 语音控制模块：基于 Sherpa ONNX 的 `KWS + ASR + VAD` 双阶段链路，先做 `D-Dog` 唤醒，再持续识别到静音结束；支持中文 / 英文 / 中英混合唤醒别名，Android 前台监听，iOS 前台监听。
+- 语音控制模块：基于 Sherpa ONNX 的 `KWS + ASR + VAD` 双阶段链路，先做 `Lumi` 唤醒，再持续识别到静音结束；支持中文 / 英文 / 中英混合唤醒别名，启动监听前会请求麦克风权限和 Android 13+ 通知权限，Android 前台监听，iOS 前台监听。
 - 电量 / 姿态 / 最近 STATE 帧可视化
 - 动作序列编辑、执行、暂停、恢复、停止
 - 动作编排已支持 `move/stand/sit/stop` 以及 `do_action` / `do_dog_behavior`，内部走 `RobotClient.*Queued()` 保持 FIFO 顺序执行

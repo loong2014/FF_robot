@@ -193,7 +193,7 @@ struct VoiceConfig {
 
   init(
     sampleRate: Int = 16000,
-    wakeWord: String = "D-Dog",
+    wakeWord: String = "Lumi",
     sensitivity: Double = 0.65
   ) {
     self.sampleRate = sampleRate
@@ -205,7 +205,7 @@ struct VoiceConfig {
     let arguments = arguments ?? [:]
     self.init(
       sampleRate: (arguments["sampleRate"] as? NSNumber)?.intValue ?? 16000,
-      wakeWord: (arguments["wakeWord"] as? String) ?? "D-Dog",
+      wakeWord: (arguments["wakeWord"] as? String) ?? "Lumi",
       sensitivity: (arguments["sensitivity"] as? NSNumber)?.doubleValue ?? 0.65
     )
   }

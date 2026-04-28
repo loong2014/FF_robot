@@ -19,6 +19,9 @@ class FakeVoiceBackend implements VoiceBackend {
   Future<String?> getPlatformVersion() async => 'test-sherpa';
 
   @override
+  Future<bool> ensurePermissions() async => true;
+
+  @override
   Future<void> start({VoiceConfig config = const VoiceConfig()}) async {
     started = true;
     lastConfig = config;
@@ -67,14 +70,14 @@ void main() {
 
     await controller.startListening(
       config: const VoiceConfig(
-        wakeWord: 'D-Dog',
+        wakeWord: 'Lumi',
         sensitivity: 0.7,
         modelLanguage: VoiceLanguage.mixed,
       ),
     );
 
     expect(backend.started, isTrue);
-    expect(backend.lastConfig?.wakeWord, 'D-Dog');
+    expect(backend.lastConfig?.wakeWord, 'Lumi');
     expect(backend.lastConfig?.engine, VoiceEngineType.sherpa);
 
     backend.emit(
@@ -105,9 +108,9 @@ void main() {
         timestamp: DateTime.utc(2024, 1, 1, 0, 0, 1),
         source: VoiceEventSource.android,
         payload: const <String, Object?>{'type': 'wake'},
-        wakeWord: 'D-Dog',
-        recognizedText: '滴狗',
-        resultLabel: 'd_dog__zh_di2',
+        wakeWord: 'Lumi',
+        recognizedText: '露米',
+        resultLabel: 'lumi__zh_lu4',
         language: VoiceLanguage.zh,
         confidence: 0.93,
       ),
@@ -141,7 +144,7 @@ void main() {
     expect(asrEvents, hasLength(1));
     expect(asrEvents.single.text, '站起来');
     expect(wakeEvents, hasLength(1));
-    expect(wakeEvents.single.wakeWord, 'D-Dog');
+    expect(wakeEvents.single.wakeWord, 'Lumi');
     expect(commandEvents, hasLength(1));
     expect(commandEvents.single.command, VoiceCommand.sitDown);
     expect(errorEvents, hasLength(1));

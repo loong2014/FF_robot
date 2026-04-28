@@ -12,7 +12,10 @@ PODS:
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
-  - permission_handler_apple (9.3.0):
+  - shared_preferences_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
+  - sherpa_onnx_ios (1.12.40):
     - Flutter
   - voice_control_sdk (0.0.1):
     - Flutter
@@ -22,7 +25,8 @@ DEPENDENCIES:
   - flutter_blue_plus_darwin (from `.symlinks/plugins/flutter_blue_plus_darwin/darwin`)
   - hand_gesture_sdk (from `.symlinks/plugins/hand_gesture_sdk/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
-  - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
+  - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
+  - sherpa_onnx_ios (from `.symlinks/plugins/sherpa_onnx_ios/ios`)
   - voice_control_sdk (from `.symlinks/plugins/voice_control_sdk/ios`)
 
 SPEC REPOS:
@@ -39,8 +43,10 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/hand_gesture_sdk/ios"
   path_provider_foundation:
     :path: ".symlinks/plugins/path_provider_foundation/darwin"
-  permission_handler_apple:
-    :path: ".symlinks/plugins/permission_handler_apple/ios"
+  shared_preferences_foundation:
+    :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
+  sherpa_onnx_ios:
+    :path: ".symlinks/plugins/sherpa_onnx_ios/ios"
   voice_control_sdk:
     :path: ".symlinks/plugins/voice_control_sdk/ios"
 
@@ -51,7 +57,8 @@ SPEC CHECKSUMS:
   MediaPipeTasksCommon: 6cfa29170d4900f04d250ad95ec058f14a741f38
   MediaPipeTasksVision: 7b1c0f5a5820e87e9d96926f5e65d8cd3744fac2
   path_provider_foundation: bb55f6dbba17d0dccd6737fe6f7f34fbd0376880
-  permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
+  shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
+  sherpa_onnx_ios: bb7acea7cc928eb608b99f11850f87124f196d40
   voice_control_sdk: e739842313a27b65cd82384bedcd0bda81df07de
 
 PODFILE CHECKSUM: ff9ad2ec3bf53af900abf7184fa166ce7710baca

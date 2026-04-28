@@ -7,8 +7,8 @@ class MethodChannelVoiceControlSdk extends VoiceControlSdkPlatform {
   MethodChannelVoiceControlSdk({
     MethodChannel? methodChannel,
     EventChannel? eventChannel,
-  })  : _methodChannel = methodChannel ??
-            const MethodChannel('voice_control_sdk'),
+  })  : _methodChannel =
+            methodChannel ?? const MethodChannel('voice_control_sdk'),
         _eventChannel =
             eventChannel ?? const EventChannel('voice_control_sdk/events');
 
@@ -19,6 +19,12 @@ class MethodChannelVoiceControlSdk extends VoiceControlSdkPlatform {
   @override
   Future<String?> getPlatformVersion() {
     return _methodChannel.invokeMethod<String>('getPlatformVersion');
+  }
+
+  @override
+  Future<bool> ensurePermissions() async {
+    return await _methodChannel.invokeMethod<bool>('ensurePermissions') ??
+        false;
   }
 
   @override
