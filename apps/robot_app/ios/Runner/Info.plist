@@ -26,6 +26,12 @@
 	<string>Robot OS Lite needs Bluetooth to scan and connect to your robot.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Robot OS Lite uses Bluetooth LE to control and monitor your robot.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Robot OS Lite needs camera access to recognize hand gestures and body actions.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Robot OS Lite needs microphone access for voice wake-up and command recognition.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Robot OS Lite needs speech recognition to detect wake words and robot commands.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

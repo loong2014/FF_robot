@@ -190,6 +190,14 @@ class RobotClient {
     await _enqueueCommand(const DiscreteCommand(CommandId.stop));
   }
 
+  Future<void> enterMotionMode() async {
+    await _enqueueCommand(SkillInvokeCommand.doAction(actionId: 4));
+  }
+
+  Future<void> recover() async {
+    await _enqueueCommand(SkillInvokeCommand.doAction(actionId: 3));
+  }
+
   Future<void> doAction(
     int actionId, {
     bool requireAck = true,

@@ -22,7 +22,7 @@
 - `protocol` 已有外层帧格式、CRC16、stream decoder、ACK、STATE 编解码。
 - `protocol` 已支持 `0x20 skill_invoke` 的一期子集：`do_action` / `do_dog_behavior`。
 - `robot_server` 已能通过 BLE 接收 `move/stand/sit/stop` 与 `skill_invoke`。
-- `robot_server` 当前已支持把 `MoveCommand` 转成 ROS `/cmd_vel`。
+- `robot_server` 当前已支持把 `MoveCommand` 转成 ROS motion topic；AlphaDog 默认使用 `/alphadog_node/set_velocity`，并保留 `/cmd_vel` 作为兼容回退。
 - `robot_server` 已支持把 `stand/sit/stop` 与 `skill_invoke` 桥接到 `/agent_skill/.../execute`。
 - `mobile_sdk` 已具备 BLE 连接、发包、收包、ACK 重试和状态流基础能力。
 
@@ -88,7 +88,7 @@ App / Client
 
 - 摇杆控制命令
   - 进入 `RosControlBridge`
-  - 一期先走 `/cmd_vel`
+  - AlphaDog 默认走 `/alphadog_node/set_velocity`
 - 技能/动作命令
   - 进入新增的 `RosSkillBridge`
   - 发布到 `/agent_skill/do_action/execute/goal`
@@ -149,7 +149,7 @@ App / Client
 
 - `RosControlBridge`
   - 负责摇杆速度类控制
-  - 一期继续发 `/cmd_vel`
+  - AlphaDog 默认发 `/alphadog_node/set_velocity`
 - `RosSkillBridge`
   - 负责 `do_action` / `do_dog_behavior`
   - 直接发布 `agent_msgs/ExecuteActionGoal`
@@ -158,20 +158,19 @@ App / Client
 
 #### 摇杆控制
 
-一期继续复用当前已有路径：
+AlphaDog 机型直接适配原生运动 topic：
 
-- `/cmd_vel`
+- `/alphadog_node/set_velocity`
 
 原因：
 
-- 代码改动最小
-- 已有 `RosControlBridge`
-- 先把 BLE -> ROS 的高层动作闭环打通
+- 机器人实测的运动 subscriber 就在这个 topic 上
+- `RosControlBridge` 已支持按 topic 选择消息类型
+- 能避免 `/cmd_vel` 空发但本体不动的假闭环
 
-注意：
+兼容说明：
 
-- AlphaDog 原生更可能直接使用 `/alphadog_node/set_velocity`
-- 如果后续确认 `/cmd_vel` 不能真正驱动本体，再把 `RosControlBridge` 切换成原生 topic adapter
+- `RosControlBridge` 仍保留 `/cmd_vel` 的兼容路径，便于其他机型复用
 
 #### 动作/行为控制
 
@@ -466,14 +465,14 @@ Python + Dart 都要补：
 
 ### 9.2 摇杆 ROS 目标不确定
 
-当前仓库已有 `/cmd_vel` 路径，但 AlphaDog 原生更可能使用：
+当前仓库已有兼容的 `/cmd_vel` 路径，但 AlphaDog 原生运动 topic 是：
 
 - `/alphadog_node/set_velocity`
 
 所以一期建议：
 
-- 先沿用 `/cmd_vel` 完成闭环
-- 二期再按真实设备控制链切换成 native motion topic adapter
+- AlphaDog 优先直接用原生 motion topic 完成闭环
+- 其他机型可继续走 `/cmd_vel` 兼容路径
 
 ### 9.3 ROS 消息依赖风险
 

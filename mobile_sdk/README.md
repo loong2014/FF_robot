@@ -5,7 +5,7 @@
 ## 当前能力
 
 - `RobotClient.connectBLE()` / `connectTCP()` / `connectMQTT()`
-- `RobotClient.move()` / `stand()` / `sit()` / `stop()`
+- `RobotClient.move()` / `enterMotionMode()` / `recover()` / `stand()` / `sit()` / `stop()`
 - `RobotClient.doAction(actionId)` / `doDogBehavior(behavior)`
 - `RobotClient.stateStream` / `frameStream` / `errors` / `connectionState`
 - BLE 扫描：`RobotClient.scanBLE()`
@@ -19,7 +19,7 @@
 - TCP：基于 `Socket`，已实现连接、stream decoder、断开上抛。
 - MQTT：基于 `mqtt_client`，已实现 `robot/{id}/control|state|event` topic 约定、二进制 state 解码与 JSON event 订阅。
 - 协议层直接复用 `protocol/dart`。
-- 高层动作类命令会编码为 `0x20 skill_invoke`，当前已接 `do_action` / `do_dog_behavior`。
+- 高层动作类命令会编码为 `0x20 skill_invoke`，当前已接 `do_action` / `do_dog_behavior`；`enterMotionMode()` 和 `recover()` 分别映射到 `do_action(action_id=4)` / `do_action(action_id=3)`。
 
 ## 当前限制
 

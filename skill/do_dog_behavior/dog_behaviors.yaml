@@ -1,0 +1,788 @@
+# 蒙
+- behavior_name: confused
+  tree:
+    parallel: 
+      - invoke:
+          ignore_fail: true
+          skill_name: do_action
+          args:
+            action_id: 20512 # confused
+
+# 蒙2
+- behavior_name: confused_again
+  tree:
+    parallel: 
+      - invoke:
+          ignore_fail: true
+          skill_name: do_action
+          args:
+            action_id: 20512 # confused
+
+# 恢复平衡站立
+- behavior_name: recovery_balance_stand_1
+  tree:
+    parallel: 
+      - invoke:
+          skill_name: do_action
+          hold_time: 7
+          ignore_fail: true
+          args:
+            action_id: 4 # move
+      - invoke:
+          skill_name: set_motion_params
+          hold_time: 7
+          ignore_fail: true
+          args:
+            roll: 0
+            pitch: 0
+            yaw: 0
+            vx: 0
+            vy: 0
+            wz: 0
+            x: 0
+            y: 0
+            z: 0.23
+
+# 恢复平衡站立
+- behavior_name: recovery_balance_stand
+  tree:
+    parallel: 
+      - invoke:
+          skill_name: do_action
+          ignore_fail: true
+          args:
+            action_id: 4 # move
+      - invoke:
+          skill_name: set_motion_params
+          hold_time: 3
+          args:
+            roll: 0
+            pitch: 0
+            yaw: 0
+            vx: 0
+            vy: 0
+            wz: 0
+            x: 0
+            y: 0
+            z: 0.23
+
+# 恢复平衡站立高站姿
+- behavior_name: recovery_balance_stand_high
+  tree:
+    sequence:
+      - parallel: 
+        - invoke:
+            skill_name: do_action
+            ignore_fail: true
+            args:
+              action_id: 4 # move
+        - invoke:
+            skill_name: set_motion_params
+            hold_time: 3
+            args:
+              roll: 0
+              pitch: 0
+              yaw: 0
+              vx: 0
+              vy: 0
+              wz: 0
+              x: 0
+              y: 0
+              z: 0.23
+      - invoke:
+          ignore_fail: true
+          skill_name: do_action
+          args:
+            action_id: 20740 # stand_high
+
+# 解除运动控制保护并恢复平衡站立
+- behavior_name: force_recovery_balance_stand
+  tree:
+    parallel: 
+      - invoke:
+          skill_name: smart_action
+          ignore_fail: true
+          args:
+            action_id: 4 # move
+            need_unlock: 1
+      - invoke:
+          skill_name: set_motion_params
+          hold_time: 3
+          args:
+            roll: 0
+            pitch: 0
+            yaw: 0
+            vx: 0
+            vy: 0
+            wz: 0
+            x: 0
+            y: 0
+            z: 0.23
+
+# 解除运动控制保护并恢复平衡站立高站姿
+- behavior_name: force_recovery_balance_stand_high
+  tree:
+    sequence:
+      - parallel: 
+        - invoke:
+            skill_name: smart_action
+            ignore_fail: true
+            args:
+              action_id: 4 # move
+              need_unlock: 1
+        - invoke:
+            skill_name: set_motion_params
+            hold_time: 3
+            args:
+              roll: 0
+              pitch: 0
+              yaw: 0
+              vx: 0
+              vy: 0
+              wz: 0
+              x: 0
+              y: 0
+              z: 0.23
+      - invoke:
+          ignore_fail: true
+          skill_name: do_action
+          args:
+            action_id: 20740 # stand_high
+
+# 恢复正常站姿和运动参数
+- behavior_name: recovery_dance_stand_and_params
+  tree:
+    parallel: 
+      - invoke:
+          ignore_fail: true
+          skill_name: set_motion_params
+          hold_time: 3
+          args:
+            roll: 0
+            pitch: 0
+            yaw: 0
+            vx: 0
+            vy: 0
+            wz: 0
+            x: 0
+            y: 0
+            z: 0.23
+      - invoke:
+          ignore_fail: true
+          skill_name: do_action
+          args:
+            action_id: 20736 # stand
+
+# 恢复正常站姿
+- behavior_name: recovery_dance_stand
+  tree:
+    parallel: 
+      - invoke:
+          ignore_fail: true
+          skill_name: do_action
+          args:
+            action_id: 20736 # stand
+
+# 恢复高站姿
+- behavior_name: recovery_dance_stand_high
+  tree:
+    parallel: 
+      - invoke:
+          ignore_fail: true
+          skill_name: do_action
+          args:
+            action_id: 20740 # stand_high
+
+# 恢复高站姿和运动参数
+- behavior_name: recovery_dance_stand_high_and_params
+  tree:
+    parallel: 
+      - invoke:
+          skill_name: do_action
+          ignore_fail: true
+          args:
+            action_id: 20740 # stand_high
+      - invoke:
+          skill_name: set_motion_params
+          ignore_fail: true
+          hold_time: 1
+          args:
+            roll: 0
+            pitch: 0
+            yaw: 0
+            vx: 0
+            vy: 0
+            wz: 0
+            x: 0
+            y: 0
+            z: 0.23
+
+# 恢复正常站姿，包括腿的位置
+- behavior_name: recovery_dance_stand_pose
+  tree:
+    parallel: 
+      - invoke:
+          ignore_fail: true
+          skill_name: do_action
+          args:
+            action_id: 20737 # recovery_pose
+
+# 恢复高站姿，包括腿的位置
+- behavior_name: recovery_dance_stand_high_pose
+  tree:
+    parallel: 
+      - invoke:
+          ignore_fail: true
+          skill_name: do_action
+          args:
+            action_id: 20741 # recovery_high_pose
+
+# 恢复平衡站立正常站姿，包括腿的位置
+- behavior_name: recovery_stand_pose
+  tree:
+    parallel: 
+      - invoke:
+          ignore_fail: true
+          skill_name: do_action
+          args:
+            - action_id: 4 # move
+              skip_wait_result: true
+            - action_id: 20737 # recovery_pose
+
+# 恢复平衡站立高站姿，包括腿的位置
+- behavior_name: recovery_stand_high_pose
+  tree:
+    parallel: 
+      - invoke:
+          ignore_fail: true
+          skill_name: do_action
+          args:
+            - action_id: 4 # move
+              skip_wait_result: true
+            - action_id: 20741 # recovery_high_pose
+
+# 等一等
+- behavior_name: wait
+  tree:
+    sequence:
+      - invoke:
+          skill_name: set_motion_params
+          hold_time: 50
+          args:
+            roll: 0
+            pitch: 0
+            yaw: 0
+            vx: 0
+            vy: 0
+            wz: 0
+            x: 0
+            y: 0
+            z: 0.23
+      - parallel: 
+        - invoke:
+            ignore_fail: true
+            skill_name: do_action
+            hold_time: 50
+            args:
+              action_id: 20739 # lie_on_elbows
+
+# 卖个萌
+- behavior_name: cute
+  tree:
+    parallel: 
+      - invoke:
+          time_offset: 1.0 # seconds
+          skill_name: do_action
+          ignore_fail: true
+          args:
+            - action_id: 20483 # wag_tail
+              base_on_current: 63
+            - action_id: 20740 # stand_high
+              base_on_current: 63
+
+# 撒娇
+- behavior_name: cute_2
+  tree:
+    sequence:
+      - invoke:
+          skill_name: do_action
+          ignore_fail: true
+          args:
+            action_id: 20736 # stand
+            base_on_current: 63
+      - parallel: 
+        - invoke:
+            skill_name: do_action
+            ignore_fail: true
+            args:
+              - action_id: 20530 # cute
+                base_on_current: 63
+              - action_id: 20740 # stand_high
+                base_on_current: 63
+
+# 享受抚摸
+- behavior_name: enjoy_touch
+  tree:
+    parallel: 
+      - invoke:
+          time_offset: 0 # seconds
+          skill_name: do_action
+          ignore_fail: true
+          args:
+            action_id: 20487 # enjoy_being_touched
+            base_on_current: 63
+
+# 非常享受
+- behavior_name: very_enjoy
+  tree:
+    parallel: 
+      - invoke:
+          time_offset: 0 # seconds
+          skill_name: do_action
+          ignore_fail: true
+          hold_time: 11
+          args:
+            - action_id: 20480 # stand
+              configure:
+                pitch: -0.1 # rad
+                z: 0.12 # meters
+                duration: 5.0 # seconds
+            - action_id: 2 # get_down
+      - invoke:
+          time_offset: 3 # seconds
+          ignore_fail: true
+          skill_name: set_motion_params
+          hold_time: 3
+          args:
+            roll: 0
+            pitch: 0
+            yaw: 0
+
+# 心急
+- behavior_name: eager
+  tree:
+    sequence:
+      - invoke:
+          skill_name: do_action
+          ignore_fail: true
+          args:
+            action_id: 20736 # stand
+            base_on_current: 63
+          hold_time: 4.0
+      - parallel: 
+        - invoke:
+            time_offset: 0.5 # seconds
+            skill_name: do_action
+            ignore_fail: true
+            args:
+              - action_id: 20485 # eager
+                base_on_current: 63
+              - action_id: 20741 # recovery_high_pose
+                base_on_current: 63
+
+# 激动2
+- behavior_name: excited_2
+  tree:
+    sequence: 
+      - invoke:
+          skill_name: do_action
+          ignore_fail: true
+          args:
+            action_id: 20736 # stand
+            base_on_current: 63
+          hold_time: 4.0
+      - parallel: 
+        - invoke:
+            time_offset: 0.5 # seconds
+            skill_name: do_action
+            ignore_fail: true
+            args:
+              - action_id: 20485 # eager
+                base_on_current: 63
+              - action_id: 20741 # recovery_high_pose
+                base_on_current: 63
+
+# 激动
+- behavior_name: excited
+  tree:
+    sequence: 
+      - invoke:
+          skill_name: do_action
+          ignore_fail: true
+          args:
+            action_id: 20736 # stand
+            base_on_current: 63
+          hold_time: 4.0
+      - parallel: 
+        - invoke:
+            skill_name: do_action
+            args:
+              - action_id: 20482 # fast_rotate
+              - action_id: 20741 # recovery_high_pose
+            hold_time: 4.0
+
+# 匍匐前进
+- behavior_name: crawl
+  tree:
+    parallel: 
+      - invoke:
+          skill_name: do_action
+          args:
+            action_id: 4 # move
+      - invoke:
+          skill_name: set_motion_params
+          hold_time: 10
+          args:
+            roll: 0
+            pitch: 0
+            yaw: 0
+            vx: 0
+            vy: 0
+            wz: 0
+            x: 0
+            y: 0
+            z: 0.14
+
+# 稍息
+- behavior_name: stand_at_ease
+  tree:
+    sequence:
+      - parallel: 
+        - invoke:
+            skill_name: do_action
+            args:
+              action_id: 20511 # stand_at_ease
+        - invoke:
+            skill_name: set_motion_params
+            ignore_fail: true
+            hold_time: 10
+            args:
+              roll: 0
+              pitch: 0
+              yaw: 0
+              vx: 0
+              vy: 0
+              wz: 0
+              x: 0
+              y: 0
+              z: 0.23
+      - invoke:
+          skill_name: do_action
+          args:
+            action_id: 4 # move
+
+# 休息
+- behavior_name: rest
+  tree:
+    sequence:
+      - invoke:
+          skill_name: do_action
+          args:
+            - action_id: 2 # get_down
+              hold_time: 10
+      - invoke:
+          skill_name: do_action
+          ignore_fail: true
+          args:
+            - action_id: 0 # estop
+              fail_in_warning: 0x03800000 # RW_HARDWARE_ESTOP | RW_POWER_OFF | RW_SOFTSTOP
+              hold_time: 10
+
+# 抖一抖
+- behavior_name: shake_self
+  tree:
+    parallel: 
+      - invoke:
+          time_offset: 1.4 # seconds
+          skill_name: do_action
+          args:
+            - action_id: 20481 # shake_self
+
+# 后空翻
+- behavior_name: back_flip
+  tree:
+    sequence:
+      - invoke:
+          skill_name: do_action
+          hold_time: 7
+          ignore_fail: false
+          args:
+            action_id: 4 # move
+      - parallel: 
+        - invoke:
+            ignore_fail: false
+            skill_name: set_motion_params
+            args:
+              z: 0.1
+        - invoke:
+            ignore_fail: false
+            skill_name: do_action
+            args:
+              action_id: 20742 # prepare_flip
+      - invoke:
+            ignore_fail: false
+            skill_name: do_action
+            args:
+              action_id: 4 # Move
+      - invoke:
+            ignore_fail: false
+            skill_name: do_action
+            args:
+              action_id: 260 # back_flip
+      - behavior: recovery_balance_stand
+
+# 前空翻
+- behavior_name: front_flip
+  tree:
+    sequence:
+      - invoke:
+          skill_name: do_action
+          hold_time: 7
+          ignore_fail: false
+          args:
+            action_id: 4 # move
+      - parallel: 
+        - invoke:
+            ignore_fail: false
+            skill_name: set_motion_params
+            args:
+              z: 0.1
+        - invoke:
+            ignore_fail: false
+            skill_name: do_action
+            args:
+              action_id: 20742 # prepare_flip
+      - invoke:
+            ignore_fail: false
+            skill_name: do_action
+            args:
+              action_id: 4 # Move
+      - invoke:
+            ignore_fail: false
+            skill_name: do_action
+            args:
+              action_id: 261 # front_flip
+      - behavior: recovery_balance_stand
+
+# 左空翻
+- behavior_name: left_flip
+  tree:
+    sequence:
+      - invoke:
+          skill_name: do_action
+          hold_time: 7
+          ignore_fail: false
+          args:
+            action_id: 4 # move
+      - parallel: 
+        - invoke:
+            ignore_fail: false
+            skill_name: set_motion_params
+            args:
+              z: 0.1
+        - invoke:
+            ignore_fail: false
+            skill_name: do_action
+            args:
+              action_id: 20743 # prepare_flip_y
+      - invoke:
+            ignore_fail: false
+            skill_name: do_action
+            args:
+              action_id: 4 # Move
+      - invoke:
+            ignore_fail: false
+            skill_name: do_action
+            args:
+              action_id: 262 # left_flip
+      - behavior: recovery_balance_stand
+
+# 右空翻
+- behavior_name: right_flip
+  tree:
+    sequence:
+      - invoke:
+          skill_name: do_action
+          hold_time: 7
+          ignore_fail: false
+          args:
+            action_id: 4 # move
+      - parallel: 
+        - invoke:
+            ignore_fail: false
+            skill_name: set_motion_params
+            args:
+              z: 0.1
+        - invoke:
+            ignore_fail: false
+            skill_name: do_action
+            args:
+              action_id: 20743 # prepare_flip_y
+      - invoke:
+            ignore_fail: false
+            skill_name: do_action
+            args:
+              action_id: 4 # Move
+      - invoke:
+            ignore_fail: false
+            skill_name: do_action
+            args:
+              action_id: 263 # right_flip
+      - behavior: recovery_balance_stand
+
+# express_affection
+- behavior_name: express_affection
+  tree:
+    sequence:
+      - invoke:
+          skill_name: do_action
+          ignore_fail: true
+          args:
+            action_id: 20736 # stand
+            base_on_current: 63
+      - invoke:
+          skill_name: do_action
+          ignore_fail: true
+          args:
+            - action_id: 20534 # affection
+              base_on_current: 63
+            - action_id: 20740 # stand_high
+              base_on_current: 63
+
+# 打哈欠
+- behavior_name: yawn
+  tree:
+    sequence:
+      - invoke:
+          skill_name: do_action
+          ignore_fail: false
+          args:
+            action_id: 20736 # stand
+            base_on_current: 63
+          hold_time: 10
+      - invoke:
+          skill_name: do_action
+          ignore_fail: true
+          args:
+            - action_id: 20491 # front_strech
+            - action_id: 20740 # stand_high
+
+# 原地跳舞
+- behavior_name: dance_in_place
+  tree:
+    sequence:
+      - invoke:
+          skill_name: do_action
+          args:
+            - action_id: 4
+          hold_time: 10 
+      - invoke:
+          skill_name: do_action
+          args:
+            - action_id: 20529 # dance_4x1500
+              base_on_current: 63
+            - action_id: 20740 # stand_high
+              base_on_current: 63
+          hold_time: 7
+
+# shake_hand
+- behavior_name: shake_hand
+  tree:
+    sequence:
+      - invoke:
+          time_offset: 0 # seconds
+          hold_time: 15
+          skill_name: do_action
+          args:
+            - action_id: 4 # move
+      - invoke:
+          time_offset: 0 # seconds
+          hold_time: 15
+          skill_name: do_action
+          args:
+            - action_id: 20541 # shake_hand_2
+      - invoke:
+          time_offset: 0 # seconds
+          skill_name: do_action
+          ignore_fail: true
+          hold_time: 4
+          args:
+            - action_id: 20740 # stand_high
+              base_on_current: 63
+
+# wave_hand
+- behavior_name: wave_hand
+  tree:
+    sequence:
+      - invoke:
+          time_offset: 0 # seconds
+          hold_time: 15
+          skill_name: do_action
+          args:
+            - action_id: 4 # move
+      - invoke:
+          time_offset: 0.8 # seconds
+          hold_time: 15
+          skill_name: do_action
+          args:
+            - action_id: 20542 # wave_hand
+      - invoke:
+          time_offset: 0 # seconds
+          skill_name: do_action
+          ignore_fail: true
+          hold_time: 2
+          args:
+            - action_id: 20740 # stand_high
+              base_on_current: 63
+
+# draw_heart
+- behavior_name: draw_heart
+  tree:
+    sequence:
+      - invoke:
+          time_offset: 0 # seconds
+          hold_time: 15
+          skill_name: do_action
+          args:
+            - action_id: 4 # move 
+      - invoke:
+          time_offset: 0.5
+          skill_name: do_action
+          ignore_fail: true
+          args:      
+            - action_id: 20593 # draw_heart
+
+# Push up
+- behavior_name: push_up
+  tree:
+    sequence:
+      - invoke:
+          ignore_fail: true
+          skill_name: do_action
+          hold_time: 10
+          args:
+            action_id: 20736 # stand
+      - invoke:
+          ignore_fail: true
+          time_offset: 0.5 # seconds
+          skill_name: do_action
+          hold_time: 10
+          args:
+            action_id: 20504 # push_up
+
+# Bow
+- behavior_name: bow
+  tree:
+    sequence:
+      - invoke:
+          ignore_fail: true
+          skill_name: do_action
+          args:
+            action_id: 20736 # stand
+      - invoke:
+          ignore_fail: true
+          time_offset: 0.5 # seconds
+          skill_name: do_action
+          hold_time: 10
+          args:
+            action_id: 20510 # bow

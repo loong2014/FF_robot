@@ -98,7 +98,7 @@ class ROSConfig:
     """
 
     enabled: bool = False
-    topic: str = "/cmd_vel"
+    topic: str = "/alphadog_node/set_velocity"
     control_hz: float = 10.0
     enable_lateral: bool = False
     node_name: str = "robot_os_lite"
@@ -196,7 +196,7 @@ def load_config_from_env() -> ServerConfig:
         ),
         ros=ROSConfig(
             enabled=_env_bool("ROBOT_ROS_ENABLED", False),
-            topic=os.getenv("ROBOT_ROS_TOPIC", "/cmd_vel"),
+            topic=os.getenv("ROBOT_ROS_TOPIC", "/alphadog_node/set_velocity"),
             control_hz=float(os.getenv("ROBOT_ROS_HZ", "10.0")),
             enable_lateral=_env_bool("ROBOT_ROS_ENABLE_LATERAL", False),
             node_name=os.getenv("ROBOT_ROS_NODE", "robot_os_lite"),

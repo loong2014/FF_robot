@@ -14,6 +14,7 @@ class BleScanPage extends StatefulWidget {
 
 class _BleScanPageState extends State<BleScanPage> {
   static const Duration _scanTimeout = Duration(seconds: 8);
+  static const String _robotDevicePrefix = 'Robot';
 
   final Map<String, BleDiscoveredDevice> _devices =
       <String, BleDiscoveredDevice>{};
@@ -60,6 +61,9 @@ class _BleScanPageState extends State<BleScanPage> {
 
     _scanSubscription = widget.client.scanBLE(timeout: _scanTimeout).listen(
       (device) {
+        if (!_isRobotDevice(device)) {
+          return;
+        }
         if (!mounted) {
           return;
         }
@@ -85,6 +89,10 @@ class _BleScanPageState extends State<BleScanPage> {
         });
       },
     );
+  }
+
+  bool _isRobotDevice(BleDiscoveredDevice device) {
+    return device.name.trim().startsWith(_robotDevicePrefix);
   }
 
   @override
@@ -115,7 +123,7 @@ class _BleScanPageState extends State<BleScanPage> {
                 : const Icon(Icons.bluetooth_searching),
             title: Text(_isScanning ? '正在扫描附近机器人...' : '扫描已完成'),
             subtitle: const Text(
-              '当前展示附近所有 BLE 设备；选择后再按 Robot OS Lite 的 service UUID 建立连接。',
+              '当前仅展示名称以 Robot 开头的 BLE 设备；选择后再按 Robot OS Lite 的 service UUID 建立连接。',
             ),
           ),
           if (_lastError != null)
@@ -131,7 +139,7 @@ class _BleScanPageState extends State<BleScanPage> {
           Expanded(
             child: devices.isEmpty
                 ? const Center(
-                    child: Text('暂无可连接设备，请确认机器人已开启 BLE 广播。'),
+                    child: Text('暂无以 Robot 开头的可连接设备，请确认机器人已开启 BLE 广播。'),
                   )
                 : ListView.separated(
                     itemCount: devices.length,

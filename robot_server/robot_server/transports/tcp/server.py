@@ -16,7 +16,8 @@ class TcpTransport(RuntimeTransport):
     """Asyncio TCP transport.
 
     Responsibilities (aligned with BLE path):
-    - Accept multiple concurrent clients; each client -> one session_id.
+    - Accept one active controller at a time. New connections are
+      rejected while an active session exists.
     - Forward raw bytes to RobotRuntime via EnvelopeHandler; StreamDecoder
       lives in RobotRuntime so we just pass the chunk through.
     - Provide per-session `send` and broadcast for 10Hz state push.
@@ -32,6 +33,7 @@ class TcpTransport(RuntimeTransport):
         self._server: Optional[asyncio.base_events.Server] = None
         self._clients: Dict[str, asyncio.StreamWriter] = {}
         self._session_counter = 0
+        self._active_session_id: Optional[str] = None
 
     @property
     def host(self) -> str:
@@ -66,6 +68,8 @@ class TcpTransport(RuntimeTransport):
             _logger.info("TCP transport stopped")
 
     async def send(self, session_id: str, payload: bytes) -> None:
+        if session_id != self._active_session_id:
+            return
         writer = self._clients.get(session_id)
         if writer is None or writer.is_closing():
             return
@@ -77,12 +81,9 @@ class TcpTransport(RuntimeTransport):
             self._drop_client(session_id)
 
     async def broadcast(self, payload: bytes) -> None:
-        if not self._clients:
+        if self._active_session_id is None:
             return
-        await asyncio.gather(
-            *(self.send(session_id, payload) for session_id in list(self._clients)),
-            return_exceptions=True,
-        )
+        await self.send(self._active_session_id, payload)
 
     def _next_session_id(self, peer: object) -> str:
         self._session_counter += 1
@@ -104,7 +105,23 @@ class TcpTransport(RuntimeTransport):
     ) -> None:
         peer = writer.get_extra_info("peername")
         session_id = self._next_session_id(peer)
+        if self._active_session_id is not None:
+            _logger.warning(
+                "TCP client rejected session=%s peer=%s active_session=%s",
+                session_id,
+                peer,
+                self._active_session_id,
+            )
+            try:
+                if not writer.is_closing():
+                    writer.close()
+                await writer.wait_closed()
+            except Exception:  # pragma: no cover - best-effort cleanup
+                pass
+            return
+
         self._clients[session_id] = writer
+        self._active_session_id = session_id
         _logger.info("TCP client connected session=%s peer=%s", session_id, peer)
 
         async def reply(payload: bytes, sid: str = session_id) -> None:
@@ -131,6 +148,8 @@ class TcpTransport(RuntimeTransport):
                 await self._handler(envelope)
         finally:
             self._drop_client(session_id)
+            if self._active_session_id == session_id:
+                self._active_session_id = None
             try:
                 if not writer.is_closing():
                     writer.close()

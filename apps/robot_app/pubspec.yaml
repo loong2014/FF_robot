@@ -11,6 +11,11 @@ dependencies:
     sdk: flutter
   mobile_sdk:
     path: ../../mobile_sdk
+  hand_gesture_sdk:
+    path: hand_gesture_sdk
+  voice_control_sdk:
+    path: voice_control_sdk
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:

@@ -9,15 +9,15 @@
 | 模块 | 当前状态 | 说明 |
 | --- | --- | --- |
 | `protocol` | 稳定 | Python / Dart 两套协议实现已对齐，包含帧结构、CRC16、stream decoder、ACK / STATE 编解码，以及 `0x20 skill_invoke`（`do_action` / `do_dog_behavior`）扩展。 |
-| `robot_server` | 可运行 | 已实现 BLE / TCP / MQTT transport、10Hz 状态广播、ROS1 `/cmd_vel` 连续控制桥、ROS skill bridge（`do_action` / `do_dog_behavior`）、ROS 状态采集桥、`.env.example` 和启动脚本。 |
+| `robot_server` | 可运行 | 已实现 BLE / TCP / MQTT transport、10Hz 状态广播、ROS1 `/cmd_vel` 连续控制桥、ROS skill bridge（`do_action` / `do_dog_behavior`）、ROS 状态采集桥、`.env.example` 和启动脚本；TCP 局域网直连按单控制者模式运行。 |
 | `mobile_sdk` | 可集成 | `RobotClient` 已提供 `connectBLE()` / `connectTCP()` / `connectMQTT()`、`move/stand/sit/stop/doAction/doDogBehavior`、命令队列、ACK 重试、连接状态、BLE 扫描、TCP / BLE / MQTT transport；BLE 客户端基础链路已完成搜索 / 连接 / 数据交互验证。 |
-| `apps/robot_app` | 演示级可用 | 已有 BLE 扫描与连接、TCP / MQTT 连接表单、状态看板、首页快捷动作直控，以及动作序列编辑与执行，并可通过动作编排下发 `do_action` / `do_dog_behavior`；仍不是完整的量产 App。 |
+| `apps/robot_app` | 演示级可用 | 已有 BLE 扫描与连接、按 `Robot` 前缀过滤设备、最近 BLE 设备记忆与启动自动重连、BLE 断线自动重连、TCP / MQTT 连接表单、状态看板、首页快捷动作直控、正式双摇杆遥控页、动作序列编辑与执行，以及语音控制模块入口与 Sherpa `KWS + ASR + VAD` 接入；语音模块当前默认处理 `D-Dog` 唤醒词，并支持中文 / 英文 / 中英混合唤醒别名，仍不是完整的量产 App。 |
 | `docs` / `scripts` | 基本齐全 | 已包含 BLE 联调、ROS 状态采集、部署、验收清单等文档，以及 `start_robot_server.sh` 启动脚本。 |
 
 ## 当前已知缺口
 
 - ACK 目前只表示 `robot_server` 已接受命令进入本地处理链，不表示机器人动作执行完成；若需要结果语义，仍需额外 event / result 通道。
-- `apps/robot_app` 还缺设备绑定、配置持久化、完整手动遥控 UI 等产品功能。
+- `apps/robot_app` 仍缺更完整的设备管理、更细错误恢复与产品级配置管理。
 - BLE 基础链路已经完成客户端真实搜索、连接和数据交互验证；当前剩余重点是稳定性回归、长时压测和更多终端覆盖，而不是基础连通性。
 - MQTT / BLE / ROS 的 smoke 验证主要靠本地脚本和手工联调，尚未形成 CI 级自动回归。
 
@@ -89,6 +89,15 @@ ROBOT_DEBUG_STATE_TICK_ENABLED=true
 
 ### 4. Flutter 侧
 
+如果你的 shell 里设置了 `PUB_HOSTED_URL` / `FLUTTER_STORAGE_BASE_URL`，请确保它们指向可访问的源。当前仓库里有些开发环境会默认使用 `pub.flutter-io.cn`，但如果该域名在你的网络环境里不可解析，`flutter pub get` / `flutter run` 会直接失败。最稳妥的做法是临时切回官方源：
+
+```bash
+unset PUB_HOSTED_URL FLUTTER_STORAGE_BASE_URL
+# 或者显式改成官方源
+export PUB_HOSTED_URL=https://pub.dev
+export FLUTTER_STORAGE_BASE_URL=https://storage.googleapis.com
+```
+
 ```bash
 cd /path/to/robot_factory/mobile_sdk
 flutter pub get
@@ -109,6 +118,7 @@ Flutter / Dart 侧当前要求满足 `>=3.5.0 <4.0.0`。
 - 运行时装配：[`robot_server/robot_server/app.py`](robot_server/robot_server/app.py)
 - SDK 入口：[`mobile_sdk/lib/src/robot_client.dart`](mobile_sdk/lib/src/robot_client.dart)
 - App 首页：[`apps/robot_app/lib/src/home_page.dart`](apps/robot_app/lib/src/home_page.dart)
+- App 正式遥控页：[`apps/robot_app/lib/src/control_page.dart`](apps/robot_app/lib/src/control_page.dart)
 
 ## 文档索引
 
@@ -127,6 +137,6 @@ Flutter / Dart 侧当前要求满足 `>=3.5.0 <4.0.0`。
 
 按当前代码与 backlog，优先级最高的工作仍是：
 
-1. 把 App 从“演示控制台”继续推进到“可交付控制产品”，补设备管理、配置记忆和更完整的控制 UI。
+1. 把 App 从“演示控制台”继续推进到“可交付控制产品”，补多设备管理、更完整的控制 UI 和产品级设置。
 2. 补 BLE 长时压测、多终端回归和 smoke 自动化，而不是重复做基础搜索 / 连接验证。
 3. 补 Python ↔ Dart 协议 golden vectors 与更多 runtime / transport 回归，继续压实协议契约。

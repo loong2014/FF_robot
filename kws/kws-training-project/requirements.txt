@@ -1,0 +1,6 @@
+torch>=2.2
+onnx>=1.14
+onnxruntime>=1.17
+numpy>=1.26
+PyYAML>=6.0
+

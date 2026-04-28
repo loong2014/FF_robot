@@ -24,7 +24,7 @@ flowchart LR
         SERVER["robot_server"]
         PPROTO["robot_protocol (Python)"]
         DISPATCH["Command Dispatcher"]
-        ROS["ROS Bridge<br/>/cmd_vel"]
+        ROS["ROS Bridge<br/>motion topic"]
         STATE["State Store + 10Hz Push"]
         SERVER --> PPROTO --> DISPATCH --> ROS
         STATE --> PPROTO
@@ -60,7 +60,7 @@ sequenceDiagram
     participant Queue as Command Queue
     participant Link as BLE/TCP/MQTT
     participant Server as robot_server
-    participant ROS as ROS /cmd_vel
+    participant ROS as ROS motion topic
 
     App->>Queue: enqueue(move / stand / sit / stop)
     Queue->>Link: send CMD(seq)
@@ -103,7 +103,7 @@ sequenceDiagram
 1. `robot_server` 收到 `CMD` 帧。
 2. 协议层完成 CRC 和 payload 解析。
 3. `CommandDispatcher` 将 `MOVE` 写入最新运动设定，将 `stand/sit/stop` 与 `skill_invoke` 分发到 ROS skill bridge。
-4. `RosControlBridge` 以 10Hz 发布 `/cmd_vel`；`RosSkillBridge` 负责发 `/agent_skill/.../execute`。
+4. `RosControlBridge` 以 10Hz 发布 motion topic；AlphaDog 默认适配 `/alphadog_node/set_velocity`；`RosSkillBridge` 负责发 `/agent_skill/.../execute`。
 
 ### 映射
 
@@ -268,7 +268,7 @@ IDLE
 3. BLE：BlueZ GATT Server 与 `cmd_char/state_char`
 4. TCP：socket server 接入同一套协议解析
 5. MQTT：Topic Router 与协议分发
-6. ROS1：`/cmd_vel` 10Hz 控制同步
+6. ROS1：10Hz 运动控制同步（AlphaDog 默认 `/alphadog_node/set_velocity`）
 7. Flutter SDK：`RobotClient` + queue + transport
 8. App 内图形化动作引擎
 9. 最后做端到端联调与真机参数校准

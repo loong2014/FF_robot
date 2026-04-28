@@ -8,7 +8,7 @@
 
 ## 1. 设计要点
 
-- 控制下行（`/cmd_vel`，10Hz）由 `RosControlBridge` 负责，**本轮完全不改动**，继续由 `RobotRuntime.start()` 启动。
+- 控制下行由 `RosControlBridge` 负责，默认按机型发布到 AlphaDog 的 `/alphadog_node/set_velocity`，并保持 10Hz。
 - 状态上行新增 `RosStateBridge`，独立订阅 **电池 / IMU / 里程 / 诊断** 四个来源，并写入 `StateStore`。
 - 协议 `STATE` 帧载荷（`battery | roll(int16) | pitch | yaw`，固定 7 字节）**保持不变**，由 `RobotRuntime._state_loop` 以 `state_hz` 向 **BLE / TCP / MQTT 三条路径**统一广播。
 - 里程 / 故障码等**放不进协议 STATE 帧**的字段，进入 `RobotStateExtras`；需要下发到 App 时通过 `RobotRuntime.publish_event()` 作为 JSON event 发到 `robot/{id}/event`（仅 MQTT 消费，遵循 AGENTS.md §4）。
@@ -31,10 +31,10 @@
                                       robot/{id}/event      (BLE/TCP 忽略)
 ```
 
-控制路径不变：
+控制路径不变（默认 motion topic 按机型适配）：
 
 ```
-App → mobile_sdk → (BLE/TCP/MQTT) → RobotRuntime → RosControlBridge → /cmd_vel @10Hz
+App → mobile_sdk → (BLE/TCP/MQTT) → RobotRuntime → RosControlBridge → ROS motion topic @10Hz
 ```
 
 ---
@@ -45,8 +45,8 @@ App → mobile_sdk → (BLE/TCP/MQTT) → RobotRuntime → RosControlBridge → 
 
 | 字段 | 环境变量 | 默认 | 说明 |
 |---|---|---|---|
-| `enabled` | `ROBOT_ROS_ENABLED` | `false` | ROS1 控制桥（`/cmd_vel`）是否启用 |
-| `topic` | `ROBOT_ROS_TOPIC` | `/cmd_vel` | 控制话题 |
+| `enabled` | `ROBOT_ROS_ENABLED` | `false` | ROS1 控制桥是否启用 |
+| `topic` | `ROBOT_ROS_TOPIC` | `/alphadog_node/set_velocity` | 控制话题；AlphaDog 默认使用该 topic |
 | `control_hz` | `ROBOT_ROS_HZ` | `10.0` | 控制发布频率（保持 10Hz） |
 | `enable_lateral` | `ROBOT_ROS_ENABLE_LATERAL` | `false` | 是否开放横向速度（四足通常关闭） |
 | `node_name` | `ROBOT_ROS_NODE` | `robot_os_lite` | `rospy.init_node` 节点名 |

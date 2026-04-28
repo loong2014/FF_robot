@@ -34,7 +34,7 @@
 | BLE 传输 | ✅（BlueZ GATT + GLib backend 已落地） | ✅（`flutter_blue_plus` 真实 transport） | ✅（已完成客户端真实扫描 / 连接 / 数据交互验证） | — | 基础链路已闭环，剩余是稳定性压测与多终端回归 |
 | TCP 传输 | 🟡（asyncio server + 广播 OK，断连语义简） | 🟡（`Socket` + stream decoder，无超时 / 无统一断开事件） | 🟡（有"Connect TCP"按钮，无参数配置 UI） | — | 跑得起来，但未产品化 |
 | MQTT 传输 | 🟡（Router、鉴权、TLS、事件分流已实现） | 🟡（真实 transport 已实现） | 🟡（已接入参数配置与连接入口） | — | 仍依赖真实 broker 与 smoke / CI 回归 |
-| ROS1 `/cmd_vel`（10Hz） | 🟡（`RosControlBridge` 有，独立线程） | 无需关心 | 无需关心 | — | 无 mock 节点 / rostest |
+| ROS1 运动控制（10Hz） | 🟡（`RosControlBridge` 有，独立线程；AlphaDog 默认 `/alphadog_node/set_velocity`） | 无需关心 | 无需关心 | — | 无 mock 节点 / rostest |
 | ROS1 状态采集（电池 / IMU / odom / 诊断） | ✅（`RosStateBridge`，topic + msg_type 可配置；默认 sensor_msgs/nav_msgs/diagnostic_msgs；battery_low + fault event） | 无需关心 | 无需关心 | — | 单测 15 条；真机 rostopic pub 验证步骤见 `docs/ros_state_integration.md` |
 | StateStore & 10Hz 状态推送 | ✅（`RobotState` + `RobotStateExtras`，真实电量/IMU/odom/故障填入；BLE/TCP/MQTT 三路广播协议 STATE） | 🟡（`stateStream` OK） | 🟡（展示 battery/roll/pitch/yaw） | — | extras（odom/fault）仅通过 MQTT event 下发 |
 | 命令队列（move 覆盖 / discrete FIFO / 未 ACK 阻塞重传） | —（server 不维护独立发送队列；负责 ACK + `seq/payload` 去重） | 🟡（`CommandQueue` 已用于 RobotClient，重试 3 次 + 100ms） | 无需关心 | — | 发送端队列当前只在 SDK 侧实现 |
@@ -187,7 +187,7 @@
   - `robot_server/robot_server/config.py`：`ROSConfig` 新增 `state_enabled` 以及 `battery_*` / `imu_*` / `odom_*` / `diagnostics_*`（topic + msg_type）、`battery_low_threshold` / `battery_event_debounce_sec` / `queue_size`；`load_config_from_env` 补全对应 `ROBOT_ROS_*` 环境变量
   - `robot_server/robot_server/runtime/state_store.py`：扩展 `OdometrySample` + `RobotStateExtras`（odometry + fault_codes），新增 `set_odometry` / `set_fault_codes` / `snapshot_extras`；协议 STATE 帧字段不变（仍是 battery / roll / pitch / yaw）
   - `robot_server/robot_server/ros/state_bridge.py`（新）：`RosStateBridge` 订阅 battery / IMU / odom / diagnostics；动态 import msg class（`pkg/Msg` 字符串）；四元数 → RPY 弧度；电池 percentage 0..1 与 0..100 两种写法 + `charge/capacity` 兜底；battery_low 事件去抖（默认 60s）；fault event 仅在 fault_codes 变化时触发；注入 `subscriber_factory` / `message_registry` / `clock` 便于单测，不依赖真实 rospy
-  - `robot_server/robot_server/runtime/robot_runtime.py`：新增 `state_store` property 与 `attach_ros_state_bridge`；`start/stop` 联动 bridge 生命周期 + 传入当前事件循环；保持 `/cmd_vel` 10Hz 控制路径与 `_state_loop` 10Hz 广播不变
+  - `robot_server/robot_server/runtime/robot_runtime.py`：新增 `state_store` property 与 `attach_ros_state_bridge`；`start/stop` 联动 bridge 生命周期 + 传入当前事件循环；保持 10Hz 运动控制路径与 `_state_loop` 10Hz 广播不变
   - `robot_server/robot_server/app.py`：`build_runtime` 在 `ros.enabled && ros.state_enabled` 时自动装配 `RosStateBridge`，并以 `runtime.publish_event` 作为 event emitter（故障 / 低电量 event 经 `MqttRouterTransport.publish_event` 走到 `robot/{id}/event`）
   - `robot_server/robot_server/ros/__init__.py` / `runtime/__init__.py` / `__init__.py`：暴露 `RosStateBridge` / `OdometrySample` / `RobotStateExtras`；调整 runtime 子包 import 顺序 + `RobotRuntime` 侧用 `TYPE_CHECKING` 引 `RosStateBridge` 以避免循环 import
   - `robot_server/tests/test_ros_state_bridge.py`（新）：15 个 test 覆盖 quaternion 数学、battery 抽取（ratio / 0..100 / charge+capacity / 非法值）、订阅启停 / topic 禁用 / 自定义厂商 topic + msg / 回调写 StateStore / battery_low 去抖 / fault 变化时触发

@@ -252,6 +252,44 @@ void main() {
       await client.dispose();
     });
 
+    test('unexpected BLE disconnect enters reconnecting and reconnects',
+        () async {
+      final firstTransport = _FakeTransport();
+      final secondTransport = _FakeTransport();
+      var transportFactoryCalls = 0;
+      final client = RobotClient(
+        reconnectPolicy: const _ImmediateReconnectPolicy(),
+        transportFactory: (transport, options) {
+          expect(transport, TransportKind.ble);
+          expect(options, isA<BleConnectionOptions>());
+          final nextTransport =
+              transportFactoryCalls == 0 ? firstTransport : secondTransport;
+          transportFactoryCalls += 1;
+          return nextTransport;
+        },
+      );
+      final states = <RobotConnectionState>[];
+      final subscription = client.connectionState.listen(states.add);
+
+      await client.connectBLE(
+        options: const BleConnectionOptions(deviceId: 'robot-1'),
+      );
+      firstTransport.simulateUnexpectedDisconnect();
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+
+      expect(transportFactoryCalls, 2);
+      expect(secondTransport.connectCount, 1);
+      expect(
+        states.any((state) => state.status == ConnectionStatus.reconnecting),
+        isTrue,
+      );
+      expect(states.last.transport, TransportKind.ble);
+      expect(states.last.status, ConnectionStatus.connected);
+
+      await subscription.cancel();
+      await client.dispose();
+    });
+
     test('incoming state frame is exposed on frameStream and stateStream',
         () async {
       final bleTransport = _FakeTransport();
@@ -300,7 +338,8 @@ void main() {
       await client.doAction(20593);
 
       expect(bleTransport.sentPayloads, hasLength(1));
-      final frame = decodeFrame(Uint8List.fromList(bleTransport.sentPayloads[0]));
+      final frame =
+          decodeFrame(Uint8List.fromList(bleTransport.sentPayloads[0]));
       final command = parseCommandPayload(frame.payload);
       expect(command, isA<SkillInvokeCommand>());
       expect((command as SkillInvokeCommand).actionId, 20593);
@@ -320,7 +359,8 @@ void main() {
       await client.doDogBehavior(DogBehavior.waveHand);
 
       expect(bleTransport.sentPayloads, hasLength(1));
-      final frame = decodeFrame(Uint8List.fromList(bleTransport.sentPayloads[0]));
+      final frame =
+          decodeFrame(Uint8List.fromList(bleTransport.sentPayloads[0]));
       final command = parseCommandPayload(frame.payload);
       expect(command, isA<SkillInvokeCommand>());
       expect((command as SkillInvokeCommand).behaviorId, DogBehavior.waveHand);
@@ -374,5 +414,22 @@ class _FakeTransport implements RobotTransport {
 
   void emitFrame(RobotFrame frame) {
     _frames.add(frame);
+  }
+
+  void simulateUnexpectedDisconnect() {
+    _isConnected = false;
+  }
+}
+
+class _ImmediateReconnectPolicy implements ReconnectPolicy {
+  const _ImmediateReconnectPolicy();
+
+  @override
+  Future<Duration?> nextDelay({
+    required TransportKind transport,
+    required int attempt,
+    Object? lastError,
+  }) async {
+    return const Duration(milliseconds: 1);
   }
 }

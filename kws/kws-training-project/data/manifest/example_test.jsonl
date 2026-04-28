@@ -1,0 +1,3 @@
+{"id":"positive_0003","audio_filepath":"data/positive/lumi_0003.wav","duration":1.16,"label":"positive","keyword":"hey_robot","transcript":"hey_robot","is_positive":true}
+{"id":"negative_0003","audio_filepath":"data/negative/music_0003.wav","duration":2.88,"label":"negative","keyword":"","transcript":"","is_positive":false}
+

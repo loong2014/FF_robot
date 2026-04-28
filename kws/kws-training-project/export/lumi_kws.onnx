@@ -1,0 +1,3 @@
+This is a placeholder artifact.
+Run `python3 scripts/export_onnx.py` after training to generate the real ONNX model bundle.
+

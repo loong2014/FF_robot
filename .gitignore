@@ -12,6 +12,7 @@ Thumbs.db
 
 # Flutter / Dart (apps/robot_app, mobile_sdk, protocol/dart)
 .dart_tool/
+.metadata
 .flutter-plugins
 .flutter-plugins-dependencies
 .packages
@@ -59,6 +60,9 @@ htmlcov/
 **/ios/Pods/
 **/ios/.symlinks/
 **/ios/Flutter/ephemeral/
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/Flutter.podspec
 **/macos/Flutter/ephemeral/
 **/linux/flutter/ephemeral/
 **/windows/flutter/ephemeral/

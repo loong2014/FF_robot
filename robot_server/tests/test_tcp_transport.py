@@ -71,6 +71,60 @@ class TcpTransportUnitTests(unittest.IsolatedAsyncioTestCase):
         # session_id should be unique even across reconnects (monotonic suffix).
         self.assertIn("#", received[0].session_id)
 
+    async def test_rejects_second_client_while_controller_is_active(self) -> None:
+        transport = TcpTransport(host="127.0.0.1", port=await _pick_free_port())
+        received: List[TransportEnvelope] = []
+
+        async def handler(envelope: TransportEnvelope) -> None:
+            received.append(envelope)
+            await envelope.reply(b"ack:" + envelope.payload)
+
+        await transport.start(handler)
+        try:
+            first_reader, first_writer = await asyncio.open_connection(
+                transport.host, transport.port
+            )
+            first_writer.write(b"ping-first")
+            await first_writer.drain()
+            first_reply = await asyncio.wait_for(first_reader.read(64), timeout=1.0)
+            self.assertEqual(first_reply, b"ack:ping-first")
+
+            second_reader, second_writer = await asyncio.open_connection(
+                transport.host, transport.port
+            )
+
+            second_writer.write(b"ping-second")
+            await second_writer.drain()
+            try:
+                second_payload = await asyncio.wait_for(
+                    second_reader.read(1), timeout=1.0
+                )
+            except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, OSError):
+                second_payload = b""
+            self.assertEqual(second_payload, b"")
+
+            first_writer.close()
+            try:
+                await first_writer.wait_closed()
+            except Exception:
+                pass
+
+            for _ in range(50):
+                if transport._active_session_id is None:
+                    break
+                await asyncio.sleep(0.01)
+            self.assertIsNone(transport._active_session_id)
+
+            second_writer.close()
+            try:
+                await second_writer.wait_closed()
+            except Exception:
+                pass
+        finally:
+            await transport.stop()
+
+        self.assertEqual(len(received), 1)
+
     async def test_send_to_unknown_session_is_noop(self) -> None:
         transport = TcpTransport(host="127.0.0.1", port=await _pick_free_port())
         await transport.start(lambda envelope: asyncio.sleep(0))

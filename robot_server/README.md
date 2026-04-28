@@ -6,7 +6,7 @@ Ubuntu 机器人端服务，负责：
 - 解析统一二进制协议
 - 成功接受 `CMD` 进入本地处理链后回 ACK；重复包只回 ACK 不重复执行业务动作
 - 以 10Hz 向外广播状态
-- 将 `MOVE` 同步到 ROS1 `/cmd_vel`
+- 将 `MOVE` 同步到 ROS1 运动 topic；AlphaDog 默认 `/alphadog_node/set_velocity`
 - 将 `STAND` / `SIT` / `STOP` 以及 `0x20 skill_invoke` 路由到 `/agent_skill/.../execute`
 - 从 ROS1 订阅电池 / IMU / 里程 / 诊断，填充真实状态并推送事件
 
@@ -16,6 +16,9 @@ Ubuntu 机器人端服务，负责：
 BlueZ GATT 外设代码骨架。保留了 `robot_server` 的 transport 接口、ACK / STATE
 协议和单测接口，但底层的 GATT 注册、广告、读写 characteristic 流程换成了
 已验证实现。
+
+TCP 仍可作为局域网直连旁路使用，但同一时刻只允许一个活动控制连接；已有连接
+未释放前，新连接会被拒绝，以避免多手机同时控制。
 
 默认行为仍然是：
 
@@ -42,7 +45,7 @@ BlueZ GATT 外设代码骨架。保留了 `robot_server` 的 transport 接口、
 - `runtime/robot_runtime.py`
   整体编排与 10Hz 状态推送
 - `ros/bridge.py`
-  ROS1 控制桥（下行 `/cmd_vel`，10Hz）
+  ROS1 控制桥（下行 motion topic，10Hz；AlphaDog 默认 `/alphadog_node/set_velocity`）
 - `ros/skill_bridge.py`
   ROS1 skill bridge（下行 `do_action` / `do_dog_behavior`）
 - `ros/state_bridge.py`
@@ -51,7 +54,7 @@ BlueZ GATT 外设代码骨架。保留了 `robot_server` 的 transport 接口、
 ## 当前命令映射
 
 - `0x01 MOVE`
-  继续走 `/cmd_vel` 连续控制
+  继续走 ROS 连续控制；AlphaDog 机型默认发布到 `/alphadog_node/set_velocity`，并会在首个摇杆输入前先触发 `do_action(action_id=4)` 进入运动模式；只有在 `ROBOT_ROS_ENABLED=true` 且目标机器人上的 `rospy` / 对应消息包可用时，`MOVE` 才会真正发布到底盘控制链
 - `0x10 STAND`
   默认映射 `do_action(action_id=3)`
 - `0x11 SIT`
@@ -60,6 +63,12 @@ BlueZ GATT 外设代码骨架。保留了 `robot_server` 的 transport 接口、
   先取消当前 skill goal，再执行 `do_action(action_id=6)`
 - `0x20 skill_invoke`
   一期已接 `do_action(action_id:uint16)` 与 `do_dog_behavior(behavior_id:uint8)`
+
+如果只看到 BLE 收包 / ACK 日志，但机器人本体不动，优先检查：
+
+1. `ROBOT_ROS_ENABLED=true` 是否已经打开
+2. `ROBOT_ROS_ENABLE_LATERAL=true` 是否按需打开横移
+3. 目标机器狗上 `rospy`、`geometry_msgs` 是否可导入
 
 ACK 语义保持不变：只表示命令成功进入 `robot_server` 本地处理链，不表示机器人动作执行完成。
 

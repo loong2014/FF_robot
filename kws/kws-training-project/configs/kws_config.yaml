@@ -1,0 +1,42 @@
+{
+  "project_name": "lumi_kws",
+  "sample_rate": 16000,
+  "num_mel_bins": 40,
+  "frame_length_ms": 25,
+  "frame_shift_ms": 10,
+  "encoder_type": "lstm",
+  "input_dim": 40,
+  "hidden_dim": 128,
+  "num_layers": 2,
+  "num_heads": 4,
+  "ff_dim": 256,
+  "conv_kernel": 15,
+  "dropout": 0.1,
+  "batch_size": 16,
+  "epochs": 20,
+  "learning_rate": 0.001,
+  "weight_decay": 0.0001,
+  "train_split": 0.8,
+  "dev_split": 0.1,
+  "test_split": 0.1,
+  "random_seed": 42,
+  "positive_dir": "data/positive",
+  "negative_dir": "data/negative",
+  "manifest_dir": "data/manifest",
+  "checkpoints_dir": "models/checkpoints",
+  "export_dir": "export",
+  "keywords": [
+    "Lumi",
+    "Hey Robot"
+  ],
+  "keyword_boost": 1.5,
+  "keyword_threshold": 0.35,
+  "streaming": {
+    "chunk_ms": 80,
+    "decision_window_ms": 160,
+    "cooldown_ms": 600,
+    "posterior_threshold": 0.6,
+    "blank_margin": 0.15
+  }
+}
+

@@ -7,20 +7,35 @@ import 'package:mobile_sdk/mobile_sdk.dart';
 import 'action_engine.dart';
 import 'action_models.dart';
 import 'action_program_view.dart';
+import 'ble_device_store.dart';
+import 'ble_reconnect_policy.dart';
 import 'ble_scan_page.dart';
+import 'control_page.dart';
+import 'gesture_module_page.dart';
 import 'mqtt_connect_dialog.dart';
 import 'quick_control_panel.dart';
+import 'voice_module_page.dart';
 import 'tcp_connect_dialog.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({
+    super.key,
+    this.client,
+    this.bleDeviceStore,
+  });
+
+  final RobotClient? client;
+  final BleDeviceStore? bleDeviceStore;
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  final RobotClient _client = RobotClient();
+  late final RobotClient _client =
+      widget.client ?? RobotClient(reconnectPolicy: const BleReconnectPolicy());
+  late final BleDeviceStore _bleDeviceStore =
+      widget.bleDeviceStore ?? SharedPreferencesBleDeviceStore();
   late final ActionEngine _engine = ActionEngine(_client);
   late final List<ActionStep> _initialProgram = <ActionStep>[
     ActionStep.stand(),
@@ -50,6 +65,7 @@ class _HomePageState extends State<HomePage> {
   String? _connectedBleDeviceName;
   TcpConnectionOptions _lastTcpOptions = const TcpConnectionOptions();
   MqttConnectionOptions _lastMqttOptions = const MqttConnectionOptions();
+  bool _didAttemptAutoConnect = false;
 
   @override
   void initState() {
@@ -89,6 +105,9 @@ class _HomePageState extends State<HomePage> {
         return;
       }
       _showMessage('运行时错误: $error');
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_restoreSavedBleConnection());
     });
   }
 
@@ -256,6 +275,84 @@ class _HomePageState extends State<HomePage> {
                               onMessage: _showMessage,
                             ),
                           ),
+                          _ControlCard(
+                            title: '正式遥控',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  '新增双摇杆 + 动作矩阵控制页，主流程面向 BLE，适合作为正式遥控入口。',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: const Color(0xFF4B6B66),
+                                      ),
+                                ),
+                                const SizedBox(height: 16),
+                                FilledButton.icon(
+                                  onPressed: _openControlPage,
+                                  icon: const Icon(
+                                    Icons.gamepad_rounded,
+                                    size: 18,
+                                  ),
+                                  label: const Text('打开控制页面'),
+                                ),
+                              ],
+                            ),
+                          ),
+                          _ControlCard(
+                            title: '手势识别模块',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  '独立接入 hand_gesture_sdk，打开后会启动手势 / 动作识别页，并把事件流回传到 Flutter。',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: const Color(0xFF4B6B66),
+                                      ),
+                                ),
+                                const SizedBox(height: 16),
+                                FilledButton.icon(
+                                  onPressed: _openGestureModulePage,
+                                  icon: const Icon(
+                                    Icons.pan_tool_alt_rounded,
+                                    size: 18,
+                                  ),
+                                  label: const Text('打开手势模块'),
+                                ),
+                              ],
+                            ),
+                          ),
+                          _ControlCard(
+                            title: '语音控制模块',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  '当前语音模块使用 Sherpa 的 KWS + ASR + VAD 双阶段链路，先做 "D-Dog" 唤醒，再持续识别到静音结束，支持中文 / 英文 / 中英混合唤醒别名。',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: const Color(0xFF4B6B66),
+                                      ),
+                                ),
+                                const SizedBox(height: 16),
+                                FilledButton.icon(
+                                  onPressed: _openVoiceModulePage,
+                                  icon: const Icon(
+                                    Icons.mic_rounded,
+                                    size: 18,
+                                  ),
+                                  label: const Text('打开语音模块'),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 20),
@@ -339,12 +436,10 @@ class _HomePageState extends State<HomePage> {
     }
 
     try {
-      await _client.connectBLE(
-        options: BleConnectionOptions(deviceId: device.id),
+      await _connectToBleDevice(
+        deviceId: device.id,
+        deviceName: device.name,
       );
-      setState(() {
-        _connectedBleDeviceName = device.name;
-      });
       _showMessage('BLE 已连接到 ${device.name}');
     } catch (error) {
       _showMessage(_describeBleError(error));
@@ -404,11 +499,112 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _disconnect() async {
     try {
+      final shouldClearSavedBleDevice =
+          _connection.transport == TransportKind.ble;
       await _client.disconnect();
+      if (shouldClearSavedBleDevice) {
+        await _bleDeviceStore.clear();
+      }
       _showMessage('已断开连接');
     } catch (error) {
       _showMessage('断开失败: $error');
     }
+  }
+
+  Future<void> _openControlPage() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ControlPage(
+          client: _client,
+          initialBleDeviceName: _connectedBleDeviceName,
+          onBleDeviceConnected: (BleDiscoveredDevice device) {
+            unawaited(_rememberBleDevice(device));
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _restoreSavedBleConnection() async {
+    if (_didAttemptAutoConnect) {
+      return;
+    }
+    _didAttemptAutoConnect = true;
+
+    final savedDevice = await _bleDeviceStore.load();
+    if (!mounted || savedDevice == null || _isConnectingOrConnected) {
+      return;
+    }
+
+    try {
+      await _connectToBleDevice(
+        deviceId: savedDevice.id,
+        deviceName: savedDevice.name,
+        rememberDevice: false,
+      );
+      if (!mounted) {
+        return;
+      }
+      final label = savedDevice.name.isEmpty ? '上次 BLE 设备' : savedDevice.name;
+      _showMessage('已自动连接到 $label');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage('自动连接上次 BLE 设备失败: ${_describeBleError(error)}');
+    }
+  }
+
+  Future<void> _connectToBleDevice({
+    required String deviceId,
+    required String deviceName,
+    bool rememberDevice = true,
+  }) async {
+    await _client.connectBLE(
+      options: BleConnectionOptions(deviceId: deviceId),
+    );
+    await _updateConnectedBleDevice(
+      SavedBleDevice(id: deviceId, name: deviceName),
+      rememberDevice: rememberDevice,
+    );
+  }
+
+  Future<void> _rememberBleDevice(BleDiscoveredDevice device) async {
+    await _updateConnectedBleDevice(
+      SavedBleDevice(id: device.id, name: device.name),
+      rememberDevice: true,
+    );
+  }
+
+  Future<void> _updateConnectedBleDevice(
+    SavedBleDevice device, {
+    required bool rememberDevice,
+  }) async {
+    if (rememberDevice) {
+      await _bleDeviceStore.save(device);
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _connectedBleDeviceName = device.name.isEmpty ? null : device.name;
+    });
+  }
+
+  Future<void> _openGestureModulePage() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const GestureModulePage(),
+      ),
+    );
+  }
+
+  Future<void> _openVoiceModulePage() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => const VoiceModulePage(),
+      ),
+    );
   }
 
   void _showMessage(String message) {
