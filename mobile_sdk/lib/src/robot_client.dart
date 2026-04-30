@@ -364,8 +364,7 @@ class RobotClient {
     try {
       await transport.send(next.frameBytes);
     } catch (error) {
-      _errorController.add(error);
-      await _handleTransportFailure(error);
+      await _handleCommandSendFailure(transport, error);
     }
   }
 
@@ -439,10 +438,22 @@ class RobotClient {
         Object error,
         StackTrace stackTrace,
       ) async {
-        _errorController.add(error);
-        await _handleTransportFailure(error);
+        await _handleCommandSendFailure(transport, error);
       }),
     );
+  }
+
+  Future<void> _handleCommandSendFailure(
+    RobotTransport transport,
+    Object error,
+  ) async {
+    _errorController.add(error);
+    if (!identical(_transport, transport)) {
+      return;
+    }
+    if (!transport.isConnected) {
+      await _handleTransportFailure(error);
+    }
   }
 
   Future<void> _connectWith(TransportKind transport, Object options) async {

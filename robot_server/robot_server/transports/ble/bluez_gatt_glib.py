@@ -14,7 +14,7 @@ import asyncio
 import functools
 import logging
 import threading
-from typing import Any, Callable, Dict, List, Optional, TypeVar
+from typing import Any, Awaitable, Callable, Dict, List, Optional, TypeVar
 
 from ...config import BLEConfig
 from ...models import TransportEnvelope
@@ -23,6 +23,7 @@ from ..base import EnvelopeHandler, RuntimeTransport
 _logger = logging.getLogger(__name__)
 _T = TypeVar("_T")
 _ASYNCIO_TO_THREAD = getattr(asyncio, "to_thread", None)
+SessionDisconnectHandler = Callable[[str, str], Awaitable[None]]
 
 try:
     import dbus  # type: ignore[import-not-found]
@@ -412,6 +413,10 @@ class BlueZGATTTransportGLib(RuntimeTransport):
         self._registering_advertisement = False
         self._adv_register_attempts = 0
         self._session_id = "central"
+        self._disconnect_handler: Optional[SessionDisconnectHandler] = None
+
+    def set_disconnect_handler(self, handler: SessionDisconnectHandler) -> None:
+        self._disconnect_handler = handler
 
     async def start(self, handler: EnvelopeHandler) -> None:
         if not self._config.enabled:
@@ -604,8 +609,26 @@ class BlueZGATTTransportGLib(RuntimeTransport):
             return
 
         _logger.info("BLE central disconnected device=%s path=%s", device_label, device_path)
+        session_id = device_path or self._session_id
+        self._notify_disconnect(session_id)
         if device_path and device_path == self._session_id:
             self._session_id = "central"
+
+    def _notify_disconnect(self, session_id: str) -> None:
+        if self._asyncio_loop is None or self._disconnect_handler is None:
+            return
+        future = asyncio.run_coroutine_threadsafe(
+            self._disconnect_handler(self.name, session_id),
+            self._asyncio_loop,
+        )
+        future.add_done_callback(self._log_disconnect_exception)
+
+    @staticmethod
+    def _log_disconnect_exception(future: "asyncio.Future[Any]") -> None:
+        try:
+            future.result()
+        except Exception:  # pragma: no cover - best effort logging
+            _logger.exception("BLE disconnect handler failed")
 
     @staticmethod
     def _device_label(device_path: str) -> str:

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import unittest
 
 from robot_protocol import Frame, FrameType, StreamDecoder, build_ack_frame, encode_frame
 from robot_server.config import BLEConfig
 from robot_server.transports.ble.bluez_gatt import BlueZGATTTransport, StateCharacteristic
+from robot_server.transports.ble.bluez_gatt_glib import DEVICE_IFACE
 
 
 class _FakeVariant:
@@ -79,6 +81,29 @@ class BlueZGATTTransportTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(len(state_char.emitted), 1)
         self.assertEqual(StreamDecoder().feed(state_char.emitted[0])[0].frame_type, FrameType.ACK)
+
+    async def test_device_disconnect_notifies_runtime_handler(self) -> None:
+        transport = BlueZGATTTransport(BLEConfig())
+        loop = asyncio.get_running_loop()
+        transport._asyncio_loop = loop
+        transport._session_id = "/org/bluez/hci0/dev_DE_AD_BE_EF"
+        calls = []
+
+        async def disconnect_handler(transport_name: str, session_id: str) -> None:
+            calls.append((transport_name, session_id))
+
+        transport.set_disconnect_handler(disconnect_handler)
+
+        transport._on_properties_changed(
+            DEVICE_IFACE,
+            {"Connected": _FakeVariant(False)},
+            [],
+            path="/org/bluez/hci0/dev_DE_AD_BE_EF",
+        )
+        await loop.run_in_executor(None, lambda: None)
+
+        self.assertEqual(calls, [("ble", "/org/bluez/hci0/dev_DE_AD_BE_EF")])
+        self.assertEqual(transport._session_id, "central")
 
 
 if __name__ == "__main__":

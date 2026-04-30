@@ -9,6 +9,8 @@
 - 记录最近一次成功连接的 BLE 设备，并在下次启动时自动尝试重连
 - BLE 意外断开后的自动重连
 - 新增正式遥控页：双摇杆 + 动作矩阵控制
+- 正式遥控页在 BLE 断开 / 重连 / 命令错误后会重置本地运动模式缓存；下一次摇杆会重新发送 `enterMotionMode()`，避免机器狗异常恢复后只发速度命令而不进入运行模式。
+- 正式遥控页在 BLE 连接状态离开 connected 后会立即停止本地摇杆定时发送；真机侧还需要 `robot_server` 的 BLE 断开保护把 ROS 速度清零。
 - 首页新增完整动作控制页：打包 `robot_skill` JSON，展示全部 `do_action` / `do_dog_behavior`
 - TCP / MQTT 连接配置弹窗
 - 连接状态展示
@@ -38,7 +40,7 @@
 - 控制页主流程面向 BLE，页面内只提供 BLE 连接入口。
 - 摇杆和动作按钮统一通过 `mobile_sdk/RobotClient` 下发，不直接依赖 transport 实现；手动控制使用默认实时语义，避免连续点击把多个动作排成 FIFO。
 - 机器人端必须开启 `ROBOT_ROS_ENABLED=true`，`MOVE` 才会真正进入机器人对应的 ROS 控制链；AlphaDog 默认是 `/alphadog_node/set_velocity`。
-- 右上角急停按钮在 `急停` / `恢复` 间切换；`急停` 会发送真机 `EStop`，`恢复` 会发送 `Recovery stand`，摇杆首次进入还会先发送一次“进入运动模式”命令。
+- 右上角急停按钮在 `急停` / `恢复` 间切换；`急停` 会发送真机 `EStop`，`恢复` 会发送 `Recovery stand`，每次新的摇杆会话都会先发送一次“进入运动模式”命令。当前 BLE STATE 不包含真机运行模式字段，因此这里采用保守重发，而不是声称已经能监听真实运行模式。
 - 若要让左摇杆的横向移动真正生效，机器人端部署配置还需设置 `ROBOT_ROS_ENABLE_LATERAL=true`。
 
 ## 完整动作控制页说明

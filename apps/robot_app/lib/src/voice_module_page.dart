@@ -25,7 +25,7 @@ class _VoiceModulePageState extends State<VoiceModulePage> {
   VoiceErrorEvent? _latestError;
   bool _listening = false;
   bool _retainLatestError = false;
-  double _sensitivity = 0.65;
+  double _sensitivity = 0.82;
   Duration _wakeDebounce = const Duration(milliseconds: 1200);
   VoiceLanguage _modelLanguage = VoiceLanguage.mixed;
   String _statusMessage = '尚未启动';
@@ -328,6 +328,11 @@ class _VoiceModulePageState extends State<VoiceModulePage> {
                             return Text(
                               '[error] ${event.code} | ${event.message}',
                               style: const TextStyle(color: Color(0xFFB42318)),
+                            );
+                          }
+                          if (event is VoiceTelemetryEvent) {
+                            return Text(
+                              '[telemetry] ${event.message}',
                             );
                           }
                           return Text(

@@ -1,74 +1,299 @@
 # voice_control_sdk
 
-`voice_control_sdk` 是 `apps/robot_app` 里的本地 Flutter 插件，用于基于 Sherpa ONNX 的离线语音控制。
+`voice_control_sdk` 是 `apps/robot_app` 内的独立 Flutter 语音输入 SDK，用于在 Android / iOS 上采集麦克风音频，并通过 Sherpa ONNX 离线完成 `KWS + ASR + VAD` 双阶段语音控制。SDK 本身不直接控制机器狗，上层业务需要把 `VoiceCommandEvent` 转成 `mobile_sdk.RobotClient` 调用。
 
-## 当前定位
+当前定位是 App 内嵌插件，不是独立发布到 pub.dev 的公共包。
 
-这是语音能力的接入壳：
+## 功能范围
 
-- Dart 层统一对外暴露 `VoiceController`、`VoiceConfig`、事件模型和唤醒词 / 命令归一化逻辑
-- 底层采用 `KWS + ASR + VAD` 双阶段链路
-  - `IDLE`：Keyword Spotting 只识别唤醒词 `Lumi`
-  - `ACTIVE`：唤醒后切换到 streaming ASR；默认等待 5 秒命令语音，检测到语音后再用 VAD 静音结束
-- KWS 模型、ASR 模型和 VAD 模型都打包在 `assets/voice_models/` 下，首次启动时会复制到可写缓存目录
-- `VoiceWakeEvent` 会返回原始命中结果 `recognizedText` 和 `language`
-- `VoiceAsrEvent` 会返回实时转写和最终转写
-- `VoiceCommandEvent` 仅在最终转写命中机器人命令时产生
-- Android 侧使用前台服务采集麦克风 PCM，iOS 侧仅保证前台可用
-- `VoiceController.ensurePermissions()` 会在启动监听前请求必要权限：Android 请求麦克风和 Android 13+ 通知权限，iOS 请求麦克风权限
+- 启动 / 停止麦克风监听。
+- 基于 Sherpa ONNX Keyword Spotter 识别唤醒词，默认唤醒词为 `Lumi`。
+- 支持 `Lumi` 的英文、中文和中英混合唤醒别名，例如 `Lumi`、`loo me`、`露米`、`卢米`、`lu mi`。
+- 唤醒后切换到 streaming ASR，持续识别到静音结束或超时。
+- 使用 Silero VAD 判断命令语音是否开始和结束。
+- 输出事件流：状态、唤醒、ASR 转写、命令、错误和遥测。
+- 输出命令事件：站立、坐下、前进、后退。
+- 模型文件内置在插件 assets 中，运行时不需要联网下载。
 
-## 模型落地清单
+## 目录结构
 
-如果要把 Sherpa 模型放进 App assets，请严格使用下面这三个目标位点，不要改目录名：
+```text
+voice_control_sdk/
+├── lib/
+│   ├── voice_control_sdk.dart                  # Dart 对外入口
+│   └── src/
+│       ├── voice_backend.dart                  # Sherpa KWS + ASR + VAD 编排
+│       ├── voice_controller.dart               # 上层控制器
+│       ├── voice_models.dart                   # 事件、配置、枚举模型
+│       ├── voice_wake_mapper.dart              # 唤醒词别名和 keywords 生成
+│       ├── voice_command_mapper.dart           # ASR 文本到命令的映射
+│       ├── voice_control_sdk_method_channel.dart
+│       └── voice_control_sdk_platform_interface.dart
+├── android/src/main/kotlin/.../
+│   ├── VoiceControlSdkPlugin.kt                # Android 插件入口与权限请求
+│   ├── VoiceListeningService.kt                # Android 前台服务音频采集
+│   ├── VoiceEventHub.kt                        # Android EventChannel 分发
+│   └── VoiceConfig.kt                          # Android 原生配置模型
+├── ios/Classes/
+│   ├── VoiceControlSdkPlugin.swift             # iOS 插件入口
+│   └── VoiceListeningCoordinator.swift         # iOS 前台音频采集
+├── assets/voice_models/                        # KWS / ASR / VAD 模型
+└── test/                                       # Dart 单测
+```
 
-- `assets/voice_models/kws/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/`
-- `assets/voice_models/asr/sherpa-onnx-streaming-zipformer-small-bilingual-zh-en-2023-02-16/`
-- `assets/voice_models/vad/silero_vad.onnx`
+## Dart API
 
-推荐的官方下载源：
+入口类：
 
-- KWS: `https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20.tar.bz2`
-- ASR: `https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-small-bilingual-zh-en-2023-02-16.tar.bz2`
-- VAD: `https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx`
+```dart
+final controller = VoiceController();
 
-只需要把归档内的模型文件复制到上面的目录，不需要把 `keywords.txt` 一起打进 assets。`keywords.txt` 会由后端在首次启动时生成到可写缓存目录。
+final granted = await controller.ensurePermissions();
+if (granted) {
+  await controller.startListening(
+    config: const VoiceConfig(wakeWord: 'Lumi'),
+  );
+}
 
-当前最小发布体积保留的文件如下：
+controller.onWake.listen((VoiceWakeEvent event) {
+  // 唤醒词命中
+});
 
-- KWS:
-  - `encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx`
-  - `decoder-epoch-13-avg-2-chunk-16-left-64.onnx`
-  - `joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx`
-  - `tokens.txt`
-- ASR:
-  - `encoder-epoch-99-avg-1.int8.onnx`
-  - `decoder-epoch-99-avg-1.int8.onnx`
-  - `joiner-epoch-99-avg-1.int8.onnx`
-  - `tokens.txt`
-  - `bpe.model`
-- VAD:
-  - `silero_vad.onnx`
+controller.onAsr.listen((VoiceAsrEvent event) {
+  // ASR 实时或最终转写
+});
 
-如果你后面替换模型，先把新包放回上述目录，再运行仓库根目录下的 `scripts/prune_voice_models.sh`，它会把 fp32 和示例文件裁掉，只保留最小发布集。
+controller.onCommand.listen((VoiceCommandEvent event) {
+  // 上层可映射到 RobotClient 控制
+});
 
-如果你更改模型目录名，需要同时更新 `voice_control_sdk/pubspec.yaml` 里的 assets 声明，否则 Flutter 不会把新模型文件打进 App bundle。
+await controller.stopListening();
+await controller.dispose();
+```
 
-## 对外 API
+`startListening()` 会先在 Dart 层加载 / 复制 Sherpa 模型，再启动平台侧音频采集。重复调用时会先停止当前运行时并重建 Sherpa session。
 
-- `VoiceController.startListening()`
-- `VoiceController.stopListening()`
-- `VoiceController.ensurePermissions()`
-- `VoiceController.onWake`
-- `VoiceController.onAsr`
-- `VoiceController.onCommand`
-- `VoiceController.state`
-- `VoiceWakeMapper.buildKeywordsFileContent()` / `VoiceWakeMapper.matchResultLabel()`：用于构造和匹配 Lumi 的中英混合唤醒别名
-- `VoiceCommandMapper.normalizeTranscript()`：把原始转写归一化为可比对文本
-- `VoiceConfig` 支持配置唤醒词、模型语言、灵敏度、前导缓存、唤醒后无语音超时和静音结束阈值
+## 事件模型
 
-## 设计约束
+`VoiceEvent` 主要子类型：
 
-- Android 适合前台服务常驻监听
-- iOS 只做前台监听
-- 语音识别与唤醒都在 Dart 侧通过 Sherpa ONNX 完成
-- 当前默认唤醒词是 `Lumi`
+| 类型 | 说明 |
+| --- | --- |
+| `VoiceStateEvent` | 监听状态、提示文案、是否正在监听、是否处于命令识别阶段 |
+| `VoiceWakeEvent` | 唤醒词命中结果、唤醒词、别名 label、语言和置信度 |
+| `VoiceAsrEvent` | ASR 转写文本、语言、置信度、是否最终结果 |
+| `VoiceCommandEvent` | 命令枚举、原始文本、归一化文本、语言和置信度 |
+| `VoiceErrorEvent` | 错误码、错误信息和恢复建议 |
+| `VoiceTelemetryEvent` | 调试遥测事件 |
+
+平台侧只负责推送 `audio` / `state` / `error` / `telemetry` 事件。Dart 层把 `audio` 事件送入 Sherpa，并产出 `wake`、`asr` 和 `command` 事件。
+
+## 命令映射
+
+`VoiceCommandMapper` 在 Dart 层把最终 ASR 文本解释为机器人控制命令：
+
+| 输入示例 | 输出 |
+| --- | --- |
+| `站起来` / `stand up` | `VoiceCommand.standUp` |
+| `坐下` / `sit down` | `VoiceCommand.sitDown` |
+| `前进` / `move forward` | `VoiceCommand.forward` |
+| `后退` / `go backward` | `VoiceCommand.backward` |
+
+SDK 只输出命令事件，不直接调用 `RobotClient`。主 App 若要真正控制机器狗，应在页面或全局服务中订阅 `VoiceController.onCommand`，再调用 `VoiceActionMapper.execute()` 或直接调用 `RobotClient`。手动语音控制应使用 `RobotClient` 默认 last-wins API；如果语音命令被用于图形化编排，必须显式使用 `*Queued` API。
+
+## 技术架构
+
+```text
+Flutter App
+  -> VoiceController.startListening()
+    -> SherpaVoiceBackend
+      -> copy package assets to app support directory
+      -> KeywordSpotter(KWS)
+      -> OnlineRecognizer(ASR)
+      -> VoiceActivityDetector(VAD)
+      -> MethodChannel("voice_control_sdk")
+        -> Android VoiceListeningService / iOS VoiceListeningCoordinator
+          -> Microphone PCM stream
+          -> EventChannel("voice_control_sdk/events")
+      -> VoiceEvent stream
+  -> 上层业务映射到 mobile_sdk.RobotClient
+```
+
+Android / iOS 平台层负责权限和麦克风 PCM 采集。Sherpa 推理、唤醒状态机、VAD 结束判断、ASR 文本归一化和命令映射均在 Dart 层完成。
+
+## Android 实现
+
+Android 主入口是 `android/src/main/kotlin/com/xinzhang/voice_control_sdk/VoiceControlSdkPlugin.kt` 和 `VoiceListeningService.kt`。
+
+关键实现：
+
+- `ensurePermissions()` 请求 `RECORD_AUDIO`；Android 13+ 同时请求 `POST_NOTIFICATIONS`。
+- `startListening()` 启动 `VoiceListeningService` 前台服务。
+- `VoiceListeningService` 使用 `AudioRecord` + `MediaRecorder.AudioSource.VOICE_RECOGNITION` 采集单声道 PCM16。
+- 默认采样率来自 `VoiceConfig.sampleRate`，当前为 16000 Hz。
+- 前台服务类型为 `microphone`，通知 channel 为 `voice_control_sdk`。
+- 音频通过 `EventChannel("voice_control_sdk/events")` 以 `audio` 事件持续送回 Dart。
+
+Android 宿主 App 必须声明：
+
+- `android.permission.RECORD_AUDIO`
+- `android.permission.FOREGROUND_SERVICE`
+- `android.permission.FOREGROUND_SERVICE_MICROPHONE`
+- `android.permission.POST_NOTIFICATIONS`（Android 13+ 运行时还需授权）
+
+## iOS 实现
+
+iOS 主入口是 `ios/Classes/VoiceListeningCoordinator.swift`。
+
+关键实现：
+
+- 通过 `AVAudioSession.requestRecordPermission` 请求麦克风权限。
+- 使用 `AVAudioEngine.inputNode.installTap` 采集前台麦克风音频。
+- 音频以 `f32le` 单声道样本送回 Dart。
+- iOS 当前只保证前台监听；不声明后台语音常驻能力。
+
+iOS 宿主 App 必须声明：
+
+- `NSMicrophoneUsageDescription`
+
+当前 App 也声明了 `NSSpeechRecognitionUsageDescription`，但本 SDK 的识别路径是 Sherpa 离线推理，不依赖系统 Speech framework。
+
+## 模型资产
+
+模型随插件 assets 内置：
+
+```text
+assets/voice_models/
+├── kws/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20/
+│   ├── encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx
+│   ├── decoder-epoch-13-avg-2-chunk-16-left-64.onnx
+│   ├── joiner-epoch-13-avg-2-chunk-16-left-64.int8.onnx
+│   └── tokens.txt
+├── asr/sherpa-onnx-streaming-zipformer-small-bilingual-zh-en-2023-02-16/
+│   ├── encoder-epoch-99-avg-1.int8.onnx
+│   ├── decoder-epoch-99-avg-1.int8.onnx
+│   ├── joiner-epoch-99-avg-1.int8.onnx
+│   ├── tokens.txt
+│   └── bpe.model
+└── vad/silero_vad.onnx
+```
+
+`voice_control_sdk/pubspec.yaml` 已显式声明三个 assets 目录。`VoiceConfig` 默认使用 package asset 路径：
+
+- `packages/voice_control_sdk/assets/voice_models/kws/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20`
+- `packages/voice_control_sdk/assets/voice_models/asr/sherpa-onnx-streaming-zipformer-small-bilingual-zh-en-2023-02-16`
+- `packages/voice_control_sdk/assets/voice_models/vad/silero_vad.onnx`
+
+如果移动模型路径，必须同步更新：
+
+- `voice_control_sdk/pubspec.yaml`
+- `VoiceConfig.kwsAssetBasePath`
+- `VoiceConfig.asrAssetBasePath`
+- `VoiceConfig.vadAssetPath`
+- `assets/voice_models/README.md`
+
+如果替换模型包，先把新模型放回上述目录，再从仓库根目录运行：
+
+```bash
+scripts/prune_voice_models.sh
+```
+
+## 与 Robot App 集成
+
+App 入口在 `apps/robot_app/lib/src/voice_module_page.dart`。
+
+当前集成方式：
+
+- 首页只提供“打开语音模块”入口。
+- `VoiceModulePage` 内部创建 `VoiceController`。
+- 用户手动点“开始监听”后才会进入待唤醒状态。
+- 页面关闭时会调用 `VoiceController.dispose()`，监听随页面生命周期停止。
+- 页面当前展示事件流和识别结果；语音命令到 `RobotClient` 的实际下发还没有接入页面主流程。
+
+因此当前版本不是全局常驻唤醒。如果产品期望在 App 主界面或任意页面都能说 `Lumi` 唤醒，需要把 `VoiceController` 提升到 App 级服务，并在 App 生命周期、权限、通知和连接状态之间做统一管理。
+
+## 权限与平台要求
+
+Android：
+
+- `RECORD_AUDIO`
+- `FOREGROUND_SERVICE`
+- `FOREGROUND_SERVICE_MICROPHONE`
+- `POST_NOTIFICATIONS`（Android 13+）
+- Android 10+ 前台服务使用 `foregroundServiceType="microphone"`
+
+iOS：
+
+- `NSMicrophoneUsageDescription`
+- 仅前台监听；后台常驻需要另行评估系统限制和产品合规。
+
+通用：
+
+- 目标设备需要支持 Sherpa ONNX 对应平台 native 库。
+- 首次启动会把模型 assets 复制到应用支持目录，模型缺失或路径不一致会产生 `sherpa_asset_missing`。
+
+## 测试
+
+Dart 单测：
+
+```bash
+cd /path/to/robot_factory/apps/robot_app/voice_control_sdk
+flutter test
+```
+
+静态检查：
+
+```bash
+cd /path/to/robot_factory/apps/robot_app/voice_control_sdk
+flutter analyze
+```
+
+宿主 App 测试：
+
+```bash
+cd /path/to/robot_factory/apps/robot_app
+flutter test
+flutter analyze lib test
+```
+
+## 真机验收清单
+
+每次修改权限、音频采集、模型路径、KWS keywords、VAD 或 ASR 状态机后，至少在真机验证：
+
+- Android：第一次启动监听时能弹出麦克风权限；Android 13+ 能弹出通知权限。
+- Android：授权后出现前台服务通知。
+- Android：事件流持续出现音频相关遥测或状态，不应直接进入 `error`。
+- Android：说 `Lumi` / `露米` / `loo me` 后产生 `VoiceWakeEvent`。
+- Android：唤醒后说“站起来 / 坐下 / 前进 / 后退”能产生 `VoiceCommandEvent`。
+- iOS：第一次启动监听时能弹出麦克风权限。
+- iOS：前台打开语音模块后能采集音频。
+- iOS：说 `Lumi` / `露米` 后产生 `VoiceWakeEvent`。
+- iOS：锁屏、切后台或离开语音页后不会声称仍在监听。
+- 关闭语音页后再次打开，模型加载和监听不应卡住。
+
+## 常见问题
+
+### 主 App 里说 `Lumi` 没反应
+
+当前主 App 没有全局语音监听。语音监听只在 `VoiceModulePage` 内手动启动，页面关闭时会停止。要在 App 主界面常驻唤醒，需要把 `VoiceController` 从页面状态提升到 App 级服务，并订阅其事件流。
+
+### 点了“开始监听”但没有唤醒
+
+先看事件流和状态卡片：
+
+- 如果出现 `microphone_permission_denied`，到系统设置打开麦克风权限；Android 13+ 还要允许通知权限。
+- 如果出现 `sherpa_asset_missing`，检查 `voice_control_sdk/pubspec.yaml` assets 声明和模型目录名是否一致。
+- 如果状态停在“正在加载 Sherpa 模型”，优先检查设备 CPU / 内存和模型复制耗时。
+- 如果能进入“正在采集音频”但没有 `wake`，优先调低唤醒灵敏度阈值、靠近麦克风，并确认使用的是 `Lumi`、`露米` 或 `loo me` 这类已配置别名。
+
+### 识别到了唤醒但机器狗不动
+
+SDK 只输出 `VoiceCommandEvent`，不会直接调用机器狗控制 API。宿主 App 必须订阅命令事件并调用 `RobotClient`。当前 `voice_module_page.dart` 还没有把 `VoiceActionMapper.execute()` 接到页面主流程。
+
+### Android 启动前台服务失败
+
+检查宿主 App manifest 是否包含 `FOREGROUND_SERVICE_MICROPHONE`，并确认服务声明带有 `android:foregroundServiceType="microphone"`。Android 13+ 还需要通知权限，否则前台服务通知可能不可见或启动受限。
+
+### 模型路径调整后启动失败
+
+`VoiceConfig` 使用 package asset 路径，不能只改文件夹名。目录名、`pubspec.yaml` assets、`VoiceConfig` 默认路径和 `assets/voice_models/README.md` 必须一起改。

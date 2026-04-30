@@ -129,6 +129,14 @@ class RosControlBridge:
             self._thread.join(timeout=1.0)
             self._thread = None
 
+    def stop_motion(self, reason: str = "") -> None:
+        with self._lock:
+            self._latest_move = MoveCommand(vx=0.0, vy=0.0, yaw=0.0)
+        if reason:
+            LOGGER.warning("ros control forced zero velocity: %s", reason)
+        else:
+            LOGGER.info("ros control forced zero velocity")
+
     def apply_command(self, command: Union[MoveCommand, DiscreteCommand]) -> None:
         with self._lock:
             if isinstance(command, MoveCommand):

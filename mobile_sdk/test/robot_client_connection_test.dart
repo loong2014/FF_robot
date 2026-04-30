@@ -290,6 +290,41 @@ void main() {
       await client.dispose();
     });
 
+    test('transient BLE send failure does not reconnect while link stays up',
+        () async {
+      final bleTransport = _FakeTransport()
+        ..sendError = StateError('transient write failed');
+      final client = RobotClient(
+        ackTimeout: const Duration(milliseconds: 1),
+        maxRetries: 1,
+        reconnectPolicy: const _ImmediateReconnectPolicy(),
+        transportFactory: (transport, options) {
+          expect(transport, TransportKind.ble);
+          return bleTransport;
+        },
+      );
+      final errors = <Object>[];
+      final states = <RobotConnectionState>[];
+      final errorSubscription = client.errors.listen(errors.add);
+      final stateSubscription = client.connectionState.listen(states.add);
+
+      await client.connectBLE(
+        options: const BleConnectionOptions(deviceId: 'robot-1'),
+      );
+      await client.move(0.2, 0, 0);
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+
+      expect(errors, isNotEmpty);
+      expect(bleTransport.connectCount, 1);
+      expect(bleTransport.isConnected, isTrue);
+      expect(bleTransport.sentPayloads, hasLength(1));
+      expect(states.last.status, ConnectionStatus.connected);
+
+      await errorSubscription.cancel();
+      await stateSubscription.cancel();
+      await client.dispose();
+    });
+
     test('incoming state frame is exposed on frameStream and stateStream',
         () async {
       final bleTransport = _FakeTransport();
@@ -483,6 +518,7 @@ class _FakeTransport implements RobotTransport {
   final StreamController<RobotFrame> _frames =
       StreamController<RobotFrame>.broadcast();
   final List<List<int>> sentPayloads = <List<int>>[];
+  Object? sendError;
   bool _isConnected = false;
   int connectCount = 0;
 
@@ -510,6 +546,11 @@ class _FakeTransport implements RobotTransport {
   Future<void> send(Uint8List bytes) async {
     if (!_isConnected) {
       throw StateError('transport is disconnected');
+    }
+    final error = sendError;
+    if (error != null) {
+      sendError = null;
+      throw error;
     }
     sentPayloads.add(bytes.toList(growable: false));
   }

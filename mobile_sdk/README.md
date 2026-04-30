@@ -13,6 +13,7 @@
 - 命令队列：默认控制 API 是 last-wins，会清掉尚未发送的待处理命令，只保留最后一次手动输入；`*Queued` API 保留 FIFO 顺序语义，供图形化编程 / 动作编排使用；ACK 超时重试默认 100ms、最多 3 次。
 - 连接状态模型：`RobotConnectionState`
 - 重连策略扩展点：`ReconnectPolicy`
+- BLE 命令容错：单次 `send` 写入异常先作为命令级错误上报并交给 ACK 重试处理；只有 transport 已经处于断开状态时，才触发连接失败 / 重连流程，避免一个命令失败直接拆掉 BLE 连接。
 
 ## 当前实现
 
@@ -26,6 +27,7 @@
 
 - 还没有真正的“自动多传输回退”流程；`RobotConnectionConfig.priority` 当前只负责选择连接目标，不会在失败后自动逐个 transport 兜底。
 - App 侧业务应优先通过 `RobotClient` 使用 SDK，transport 细节不应直接成为 UI 层依赖。
+- ACK 仍只表示机器人端接受命令进入本地处理链，不表示真机动作执行成功；命令处理失败会走 `errors` Stream 和重试语义，不应被 UI 当作 BLE 连接必然断开。
 - 真正的端到端质量仍取决于机器人侧 BLE / MQTT / ROS 环境是否可用，本模块的单测不能替代真机验证。
 
 ## 测试

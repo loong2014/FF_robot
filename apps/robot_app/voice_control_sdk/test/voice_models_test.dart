@@ -17,6 +17,7 @@ void main() {
       expect(config.engine, VoiceEngineType.sherpa);
       expect(config.sampleRate, 16000);
       expect(config.wakeWord, 'Lumi');
+      expect(config.sensitivity, 0.82);
       expect(config.preRoll.inMilliseconds, 500);
       expect(config.vadSilence.inMilliseconds, 700);
       expect(config.activeNoSpeechTimeout.inSeconds, 5);

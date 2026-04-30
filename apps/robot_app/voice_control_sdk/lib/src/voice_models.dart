@@ -492,7 +492,7 @@ class VoiceConfig {
   const VoiceConfig({
     this.engine = VoiceEngineType.sherpa,
     this.wakeWord = 'Lumi',
-    this.sensitivity = 0.65,
+    this.sensitivity = 0.82,
     this.wakeDebounce = const Duration(milliseconds: 1200),
     this.modelLanguage = VoiceLanguage.mixed,
     this.sampleRate = 16000,
@@ -547,7 +547,7 @@ class VoiceConfig {
     return VoiceConfig(
       engine: voiceEngineTypeFromWire(map['engine'] as String?),
       wakeWord: (map['wakeWord'] ?? map['wake_word'] ?? 'Lumi').toString(),
-      sensitivity: _readDouble(map, 'sensitivity', fallback: 0.65),
+      sensitivity: _readDouble(map, 'sensitivity', fallback: 0.82),
       wakeDebounce: Duration(
         milliseconds: _readInt(map, 'wakeDebounceMs', fallback: 1200),
       ),

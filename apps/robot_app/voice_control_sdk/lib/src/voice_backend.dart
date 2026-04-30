@@ -76,6 +76,8 @@ class SherpaVoiceBackend implements VoiceBackend {
   Duration _silenceDuration = Duration.zero;
   DateTime _activeStartedAt =
       DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  DateTime _lastAudioTelemetryAt =
+      DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
 
   KeywordSpotter? _keywordSpotter;
   OnlineRecognizer? _asrRecognizer;
@@ -87,6 +89,8 @@ class SherpaVoiceBackend implements VoiceBackend {
   String? _lastFinalAsrText;
   List<_AudioChunk> _preRoll = <_AudioChunk>[];
   int _preRollSamples = 0;
+  int _audioChunkCount = 0;
+  int _audioSampleCount = 0;
 
   @override
   Stream<VoiceEvent> get events => _events.stream;
@@ -191,6 +195,9 @@ class SherpaVoiceBackend implements VoiceBackend {
     _lastFinalAsrText = null;
     _preRoll = <_AudioChunk>[];
     _preRollSamples = 0;
+    _audioChunkCount = 0;
+    _audioSampleCount = 0;
+    _lastAudioTelemetryAt = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
     _cooldownTimer?.cancel();
     _cooldownTimer = null;
     await _platformSubscription?.cancel();
@@ -468,6 +475,7 @@ class SherpaVoiceBackend implements VoiceBackend {
         _events.add(VoiceTelemetryEvent.fromMap(event));
         return;
       case 'state':
+        _events.add(VoiceStateEvent.fromMap(event));
         return;
       default:
         _events.add(VoiceTelemetryEvent.fromMap(event));
@@ -484,6 +492,7 @@ class SherpaVoiceBackend implements VoiceBackend {
     if (chunk.samples.isEmpty) {
       return;
     }
+    _emitAudioTelemetryIfNeeded(chunk);
 
     if (_activeListening) {
       _processActiveAudio(chunk);
@@ -741,6 +750,50 @@ class SherpaVoiceBackend implements VoiceBackend {
       final _AudioChunk removed = _preRoll.removeAt(0);
       _preRollSamples -= removed.samples.length;
     }
+  }
+
+  void _emitAudioTelemetryIfNeeded(_AudioChunk chunk) {
+    _audioChunkCount += 1;
+    _audioSampleCount += chunk.samples.length;
+
+    final DateTime now = DateTime.now().toUtc();
+    if (now.difference(_lastAudioTelemetryAt) <
+        const Duration(milliseconds: 1200)) {
+      return;
+    }
+    _lastAudioTelemetryAt = now;
+
+    double sumSquares = 0;
+    double peak = 0;
+    for (final sample in chunk.samples) {
+      final abs = sample.abs();
+      if (abs > peak) {
+        peak = abs;
+      }
+      sumSquares += sample * sample;
+    }
+    final double rms = chunk.samples.isEmpty
+        ? 0
+        : sqrt(sumSquares / chunk.samples.length).clamp(0, 1).toDouble();
+
+    _events.add(
+      VoiceTelemetryEvent(
+        timestamp: now,
+        source: _platformSource(),
+        payload: <String, Object?>{
+          'type': 'telemetry',
+          'message':
+              'audio chunks=$_audioChunkCount samples=$_audioSampleCount rate=${chunk.sampleRate} rms=${rms.toStringAsFixed(4)} peak=${peak.toStringAsFixed(4)}',
+          'audioChunks': _audioChunkCount,
+          'audioSamples': _audioSampleCount,
+          'sampleRate': chunk.sampleRate,
+          'rms': rms,
+          'peak': peak,
+        },
+        message:
+            'audio chunks=$_audioChunkCount samples=$_audioSampleCount rate=${chunk.sampleRate} rms=${rms.toStringAsFixed(4)} peak=${peak.toStringAsFixed(4)}',
+      ),
+    );
   }
 
   _AudioChunk _decodeAudioChunk(Map<String, Object?> event) {

@@ -11,15 +11,38 @@ class ControlPageController extends ChangeNotifier {
     this.initialBleDeviceName,
   }) : _client = client {
     _connectionSubscription = _client.connectionState.listen((state) {
+      final wasBleConnected = isBleConnected;
       _connection = state;
+      final connectedNow = isBleConnected;
       if (state.transport != TransportKind.ble) {
         _bleDeviceName = null;
+      }
+      if (!connectedNow) {
+        _stopJoystickTimer();
+        _leftDx = 0;
+        _leftDy = 0;
+        _rightDx = 0;
+        _joystickSessionActive = false;
+        _resetMotionModeState();
+        if (wasBleConnected && state.transport == TransportKind.ble) {
+          _lastAction = 'BLE 已断开，已停止发送遥控命令';
+        }
+      } else if (!wasBleConnected) {
+        _resetMotionModeState();
+        _lastAction = 'BLE 已连接，摇杆会重新进入运动模式';
       }
       notifyListeners();
     });
     _stateSubscription = _client.stateStream.listen((state) {
       _batteryPercent = state.battery;
       notifyListeners();
+    });
+    _errorSubscription = _client.errors.listen((_) {
+      _resetMotionModeState();
+      if (_joystickSessionActive) {
+        _lastAction = '控制命令失败，摇杆会重新进入运动模式';
+        notifyListeners();
+      }
     });
   }
 
@@ -33,6 +56,7 @@ class ControlPageController extends ChangeNotifier {
 
   StreamSubscription<RobotConnectionState>? _connectionSubscription;
   StreamSubscription<RobotState>? _stateSubscription;
+  StreamSubscription<Object>? _errorSubscription;
   Timer? _joystickTimer;
 
   RobotConnectionState _connection = RobotConnectionState.idle();
@@ -43,6 +67,7 @@ class ControlPageController extends ChangeNotifier {
   bool _motionModeReady = false;
   Future<void>? _motionModeFuture;
   int _motionModeGeneration = 0;
+  bool _joystickSessionActive = false;
   double _leftDx = 0;
   double _leftDy = 0;
   double _rightDx = 0;
@@ -75,6 +100,7 @@ class ControlPageController extends ChangeNotifier {
     _leftDx = 0;
     _leftDy = 0;
     _rightDx = 0;
+    _joystickSessionActive = false;
     _resetMotionModeState();
     _emergencyStopped = false;
     await _client.disconnect();
@@ -104,6 +130,8 @@ class ControlPageController extends ChangeNotifier {
     _leftDx = 0;
     _leftDy = 0;
     _rightDx = 0;
+    _joystickSessionActive = false;
+    _resetMotionModeState();
     if (isBleConnected && !_emergencyStopped) {
       await _client.move(0, 0, 0);
     }
@@ -147,6 +175,7 @@ class ControlPageController extends ChangeNotifier {
     _leftDx = 0;
     _leftDy = 0;
     _rightDx = 0;
+    _joystickSessionActive = false;
     await _client.emergencyStop();
     _lastAction = '急停';
     notifyListeners();
@@ -174,6 +203,10 @@ class ControlPageController extends ChangeNotifier {
     if (!isBleConnected || _emergencyStopped) {
       return;
     }
+    if (!_joystickSessionActive) {
+      _joystickSessionActive = true;
+      _resetMotionModeState();
+    }
     _joystickTimer ??= Timer.periodic(_joystickInterval, (_) {
       unawaited(_sendMove());
     });
@@ -186,31 +219,39 @@ class ControlPageController extends ChangeNotifier {
   }
 
   Future<void> _sendMove() async {
-    if (!isBleConnected || _emergencyStopped) {
+    try {
+      if (!isBleConnected || _emergencyStopped) {
+        _stopJoystickTimer();
+        return;
+      }
+
+      await _ensureMotionMode();
+      if (!isBleConnected || _emergencyStopped) {
+        _stopJoystickTimer();
+        return;
+      }
+
+      final vx = (_leftDy * _maxLinearSpeed).clamp(
+        -_maxLinearSpeed,
+        _maxLinearSpeed,
+      );
+      final vy = (_leftDx * _maxLinearSpeed).clamp(
+        -_maxLinearSpeed,
+        _maxLinearSpeed,
+      );
+      final yaw = (-_rightDx * _maxYawSpeed).clamp(
+        -_maxYawSpeed,
+        _maxYawSpeed,
+      );
+
+      await _client.move(vx, vy, yaw);
+    } catch (_) {
       _stopJoystickTimer();
-      return;
+      _joystickSessionActive = false;
+      _resetMotionModeState();
+      _lastAction = '控制命令发送失败';
+      notifyListeners();
     }
-
-    await _ensureMotionMode();
-    if (!isBleConnected || _emergencyStopped) {
-      _stopJoystickTimer();
-      return;
-    }
-
-    final vx = (_leftDy * _maxLinearSpeed).clamp(
-      -_maxLinearSpeed,
-      _maxLinearSpeed,
-    );
-    final vy = (_leftDx * _maxLinearSpeed).clamp(
-      -_maxLinearSpeed,
-      _maxLinearSpeed,
-    );
-    final yaw = (-_rightDx * _maxYawSpeed).clamp(
-      -_maxYawSpeed,
-      _maxYawSpeed,
-    );
-
-    await _client.move(vx, vy, yaw);
   }
 
   Future<void> _ensureMotionMode() async {
@@ -255,6 +296,7 @@ class ControlPageController extends ChangeNotifier {
     _stopJoystickTimer();
     unawaited(_connectionSubscription?.cancel());
     unawaited(_stateSubscription?.cancel());
+    unawaited(_errorSubscription?.cancel());
     super.dispose();
   }
 }

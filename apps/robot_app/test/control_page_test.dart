@@ -13,6 +13,8 @@ class _FakeRobotClient extends RobotClient {
       StreamController<RobotConnectionState>.broadcast();
   final StreamController<RobotState> _stateController =
       StreamController<RobotState>.broadcast();
+  final StreamController<Object> _errorController =
+      StreamController<Object>.broadcast();
   final List<String> calls = <String>[];
 
   @override
@@ -51,6 +53,17 @@ class _FakeRobotClient extends RobotClient {
         },
         isBroadcast: true,
       );
+
+  @override
+  Stream<Object> get errors => _errorController.stream;
+
+  void emitConnection(RobotConnectionState state) {
+    _connectionController.add(state);
+  }
+
+  void emitError(Object error) {
+    _errorController.add(error);
+  }
 
   @override
   Future<void> move(double vx, double vy, double yaw) async {
@@ -298,5 +311,93 @@ void main() {
       isTrue,
     );
     expect(client.calls.last, 'move(0.00,0.00,0.00)');
+
+    client.calls.clear();
+    final nextGesture = await tester.startGesture(
+      tester.getCenter(joystickFinder),
+    );
+    await nextGesture.moveBy(const Offset(0, -40));
+    await tester.pump(const Duration(milliseconds: 120));
+    await nextGesture.up();
+    await tester.pump();
+
+    expect(client.calls.first, 'enterMotionMode');
   });
+
+  testWidgets(
+    'ControlPage stops joystick loop and resets motion mode on BLE disconnect',
+    (WidgetTester tester) async {
+      final client = _FakeRobotClient();
+
+      await pumpControlPage(tester, client);
+
+      final joystickFinder = find.byType(JoystickPad).first;
+      final gesture = await tester.startGesture(
+        tester.getCenter(joystickFinder),
+      );
+      await gesture.moveBy(const Offset(30, -36));
+      await tester.pump(const Duration(milliseconds: 120));
+      final callsBeforeDisconnect = client.calls.length;
+
+      client.emitConnection(
+        RobotConnectionState(
+          transport: TransportKind.ble,
+          status: ConnectionStatus.reconnecting,
+          updatedAt: DateTime.now(),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 260));
+
+      expect(client.calls.length, callsBeforeDisconnect);
+      expect(find.textContaining('BLE 已断开'), findsOneWidget);
+
+      client.emitConnection(
+        RobotConnectionState(
+          transport: TransportKind.ble,
+          status: ConnectionStatus.connected,
+          updatedAt: DateTime.now(),
+        ),
+      );
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+      client.calls.clear();
+      final resumedGesture = await tester.startGesture(
+        tester.getCenter(joystickFinder),
+      );
+      await resumedGesture.moveBy(const Offset(30, -36));
+      await tester.pump(const Duration(milliseconds: 120));
+      await resumedGesture.up();
+      await tester.pump();
+
+      expect(client.calls.first, 'enterMotionMode');
+    },
+  );
+
+  testWidgets(
+    'ControlPage resets motion mode after command error without disconnect',
+    (WidgetTester tester) async {
+      final client = _FakeRobotClient();
+
+      await pumpControlPage(tester, client);
+
+      final joystickFinder = find.byType(JoystickPad).first;
+      final gesture = await tester.startGesture(
+        tester.getCenter(joystickFinder),
+      );
+      await gesture.moveBy(const Offset(30, -36));
+      await tester.pump(const Duration(milliseconds: 120));
+
+      client.emitError(StateError('transient command failure'));
+      await tester.pump();
+      client.calls.clear();
+
+      await gesture.moveBy(const Offset(0, -12));
+      await tester.pump(const Duration(milliseconds: 120));
+      await gesture.up();
+      await tester.pump();
+
+      expect(client.calls.first, 'enterMotionMode');
+    },
+  );
 }

@@ -168,6 +168,13 @@
   - 删除 `robot_server/robot_server/runtime/command_queue.py` 与 `robot_server/tests/test_command_queue.py`；`robot_server/runtime/__init__.py` 和包根 `__init__.py` 不再导出 `CommandQueue` / `QueuedCommand`
   - 新增 `robot_server/tests/test_control_service.py`：覆盖成功 ACK、重复包只 ACK 不重执、同 `seq` 不同 payload 视为新命令、parse failure 不 ACK、bridge failure 不 ACK 且重试不被误判重复
   - 文档同步：根 `README.md`、`robot_server/README.md`、`docs/phase0_design.md`、`docs/ble_ros_sdk_execution_plan.md`、`docs/deploy.md`
+- ✅ **Milestone 11 / BLE 遥控安全与容错**（2026-04-29）：
+  - `apps/robot_app/lib/src/control_page_controller.dart`：BLE 连接状态离开 connected 时立即停止本地摇杆定时发送并重置运动模式缓存；每次新的摇杆会话、BLE 重连、命令错误后，下一次摇杆都会重新发送 `enterMotionMode()`，避免真机异常恢复后只收到速度命令。
+  - `mobile_sdk/lib/src/robot_client.dart`：单次 command `send` 失败先作为命令级错误进入 `errors` / ACK 重试，不再直接拆掉仍处于 connected 的 BLE transport；只有 transport 实际断开时才触发连接失败 / 重连流程。
+  - `robot_server/robot_server/transports/ble/bluez_gatt_glib.py` + `robot_server/robot_server/runtime/robot_runtime.py`：BLE central 断开事件上抛给 runtime，runtime 直接 `stop_motion()` 清零 ROS 连续速度并 `cancel_all()` 当前 skill goal；单帧解析 / 处理异常被 runtime 捕获记录，不影响 BLE GATT 服务继续运行。
+  - `robot_server/robot_server/ros/bridge.py`：新增 `stop_motion()`，用于不依赖 BLE 补发 `STOP` 的服务端安全停止。
+  - 测试：新增 / 更新 `apps/robot_app/test/control_page_test.dart`、`mobile_sdk/test/robot_client_connection_test.dart`、`robot_server/tests/test_ble_characteristic.py`、`robot_server/tests/test_robot_runtime.py` 覆盖断连停止发送、重入运动模式、命令写入异常不重连、BLE 断开安全停止和单帧处理异常隔离。
+  - 剩余风险：当前 BLE STATE 仍只有 battery / roll / pitch / yaw，没有真机“运行模式”字段；本轮采用保守重发 `enterMotionMode()`，如果后续需要精确判断，需要扩展 STATE / event 或增加 ROS 状态映射。
 - ✅ **Milestone 1 / Python 3.8 基座对齐**（见 P0-1）
 - ✅ **Milestone 2.2 / BLE 端到端**（见 P0-3，客户端基础链路已验，稳定性回归待补）
 - ✅ **Milestone 3 / SDK 统一连接管理**（`RobotConnectionState` + `connectionState` Stream + `switchTransport` + 默认无重连策略，测试覆盖优先级/失败/切换/BLE 保留，见 `mobile_sdk/test/robot_client_connection_test.dart`）

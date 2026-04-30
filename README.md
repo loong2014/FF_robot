@@ -9,14 +9,15 @@
 | 模块 | 当前状态 | 说明 |
 | --- | --- | --- |
 | `protocol` | 稳定 | Python / Dart 两套协议实现已对齐，包含帧结构、CRC16、stream decoder、ACK / STATE 编解码，以及 `0x20 skill_invoke`（`do_action` / `do_dog_behavior`）扩展。 |
-| `robot_server` | 可运行 | 已实现 BLE / TCP / MQTT transport、10Hz 状态广播、ROS1 `/cmd_vel` 连续控制桥、ROS skill bridge（`do_action` / `do_dog_behavior`）、ROS 状态采集桥、`.env.example` 和启动脚本；TCP 局域网直连按单控制者模式运行。 |
-| `mobile_sdk` | 可集成 | `RobotClient` 已提供 `connectBLE()` / `connectTCP()` / `connectMQTT()`、默认 last-wins 控制 API（`move/stand/sit/stop/doAction/doDogBehavior`）、编排 FIFO API（`*Queued`）、命令队列、ACK 重试、连接状态、BLE 扫描、TCP / BLE / MQTT transport；BLE 客户端基础链路已完成搜索 / 连接 / 数据交互验证。 |
-| `apps/robot_app` | 演示级可用 | 已有 BLE 扫描与连接、按 `Robot` 前缀过滤设备、最近 BLE 设备记忆与启动自动重连、BLE 断线自动重连、TCP / MQTT 连接表单、状态看板、首页快捷动作直控、正式双摇杆遥控页、完整动作控制页、动作序列编辑与执行，以及语音控制模块入口与 Sherpa `KWS + ASR + VAD` 接入；手动控制连续点击时只保留最后一个尚未发送的控制命令，图形化编排使用 FIFO 顺序执行；语音模块当前默认处理 `Lumi` 唤醒词，启动监听前会请求麦克风权限和 Android 13+ 通知权限，并支持中文 / 英文 / 中英混合唤醒别名，仍不是完整的量产 App。 |
+| `robot_server` | 可运行 | 已实现 BLE / TCP / MQTT transport、10Hz 状态广播、ROS1 `/cmd_vel` 连续控制桥、ROS skill bridge（`do_action` / `do_dog_behavior`）、ROS 状态采集桥、`.env.example` 和启动脚本；TCP 局域网直连按单控制者模式运行；BLE central 断开时会主动把 ROS 速度清零并取消当前 skill goal，避免遥控链路断开后继续运动。 |
+| `mobile_sdk` | 可集成 | `RobotClient` 已提供 `connectBLE()` / `connectTCP()` / `connectMQTT()`、默认 last-wins 控制 API（`move/stand/sit/stop/doAction/doDogBehavior`）、编排 FIFO API（`*Queued`）、命令队列、ACK 重试、连接状态、BLE 扫描、TCP / BLE / MQTT transport；单次命令写入异常不会直接拆掉仍处于 connected 的 BLE 链路，只有 transport 真实断开才进入断线 / 重连处理；BLE 客户端基础链路已完成搜索 / 连接 / 数据交互验证。 |
+| `apps/robot_app` | 演示级可用 | 已有 BLE 扫描与连接、按 `Robot` 前缀过滤设备、最近 BLE 设备记忆与启动自动重连、BLE 断线自动重连、TCP / MQTT 连接表单、状态看板、首页快捷动作直控、正式双摇杆遥控页、完整动作控制页、动作序列编辑与执行，以及语音控制模块入口与 Sherpa `KWS + ASR + VAD` 接入；手动控制连续点击时只保留最后一个尚未发送的控制命令，图形化编排使用 FIFO 顺序执行；正式遥控页在 BLE 断开后停止本地摇杆发送，重连或命令错误后的下一次摇杆会重新发送进入运动模式；语音模块当前默认处理 `Lumi` 唤醒词，启动监听前会请求麦克风权限和 Android 13+ 通知权限，并支持中文 / 英文 / 中英混合唤醒别名，仍不是完整的量产 App。 |
 | `docs` / `scripts` | 基本齐全 | 已包含 BLE 联调、ROS 状态采集、部署、验收清单等文档，以及 `start_robot_server.sh` 启动脚本。 |
 
 ## 当前已知缺口
 
 - ACK 目前只表示 `robot_server` 已接受命令进入本地处理链，不表示机器人动作执行完成；若需要结果语义，仍需额外 event / result 通道。
+- 当前 BLE 协议 STATE 仍只包含 battery / roll / pitch / yaw，没有机器狗“运行模式”字段；App 只能基于连接状态、命令错误和摇杆会话做保守的 `enterMotionMode()` 重发，不能直接判断真机内部是否已经处于运行模式。
 - `apps/robot_app` 仍缺更完整的设备管理、更细错误恢复与产品级配置管理。
 - BLE 基础链路已经完成客户端真实搜索、连接和数据交互验证；当前剩余重点是稳定性回归、长时压测和更多终端覆盖，而不是基础连通性。
 - MQTT / BLE / ROS 的 smoke 验证主要靠本地脚本和手工联调，尚未形成 CI 级自动回归。

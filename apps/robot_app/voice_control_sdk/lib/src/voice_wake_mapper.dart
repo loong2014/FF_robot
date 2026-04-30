@@ -56,10 +56,14 @@ class VoiceWakeMapper {
     required VoiceLanguage modelLanguage,
     double confidence = 1.0,
   }) {
+    final String normalizedResultLabel = resultLabel.trim().replaceFirst(
+          RegExp(r'^@+'),
+          '',
+        );
     final List<_WakeAlias> aliases =
         _buildWakeAliases(wakeWord: wakeWord, modelLanguage: modelLanguage);
     for (final alias in aliases) {
-      if (alias.resultLabel == resultLabel) {
+      if (alias.resultLabel == normalizedResultLabel) {
         return alias.toMatch(
           wakeWord: wakeWord,
           normalizedText:
@@ -70,7 +74,7 @@ class VoiceWakeMapper {
     }
 
     return matchTranscript(
-      resultLabel,
+      normalizedResultLabel,
       wakeWord: wakeWord,
       modelLanguage: modelLanguage,
       confidence: confidence,
@@ -170,6 +174,16 @@ class VoiceWakeMapper {
             wakeWord, '鲁米', '鲁米', VoiceLanguage.zh, 'zh_lu2_2', 'l ú m ǐ'),
         _wakeAlias(
             wakeWord, '噜米', '噜米', VoiceLanguage.zh, 'zh_lu2_3', 'l ú m ǐ'),
+        _wakeAlias(
+            wakeWord, '鹿米', '鹿米', VoiceLanguage.zh, 'zh_lu4_3', 'l ù m ǐ'),
+        _wakeAlias(
+            wakeWord, '陆米', '陆米', VoiceLanguage.zh, 'zh_lu4_4', 'l ù m ǐ'),
+        _wakeAlias(
+            wakeWord, '录米', '录米', VoiceLanguage.zh, 'zh_lu4_5', 'l ù m ǐ'),
+        _wakeAlias(
+            wakeWord, '绿米', '绿米', VoiceLanguage.zh, 'zh_lv4', 'l ǜ m ǐ'),
+        _wakeAlias(
+            wakeWord, '如米', '如米', VoiceLanguage.zh, 'zh_ru2', 'r ú m ǐ'),
         _wakeAlias(wakeWord, 'lu mi', 'lu mi', VoiceLanguage.zh, 'zh_lu_mi',
             'l ù m ǐ'),
       ];

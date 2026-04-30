@@ -19,6 +19,9 @@ void main() {
       expect(grammar, contains('loo me'));
       expect(grammar, contains('露米'));
       expect(grammar, contains('卢米'));
+      expect(grammar, contains('鲁米'));
+      expect(grammar, contains('鹿米'));
+      expect(grammar, contains('陆米'));
       expect(grammar, contains('lu mi'));
       expect(keywords, contains('@lumi__en_main'));
       expect(keywords, contains('@lumi__zh_lu4'));
@@ -72,17 +75,30 @@ void main() {
 
     test('matches chinese wake aliases', () {
       final match = VoiceWakeMapper.matchTranscript(
-        '露米',
+        '鲁米',
         wakeWord: 'Lumi',
         modelLanguage: VoiceLanguage.mixed,
       );
 
       expect(match, isNotNull);
       expect(match!.wakeWord, 'Lumi');
-      expect(match.recognizedText, '露米');
-      expect(match.resultLabel, 'lumi__zh_lu4');
+      expect(match.recognizedText, '鲁米');
+      expect(match.resultLabel, 'lumi__zh_lu2_2');
       expect(match.language, VoiceLanguage.zh);
-      expect(match.normalizedText, '露米');
+      expect(match.normalizedText, '鲁米');
+    });
+
+    test('matches sherpa labels with optional at prefix', () {
+      final match = VoiceWakeMapper.matchResultLabel(
+        '@lumi__zh_lu2_2',
+        wakeWord: 'Lumi',
+        modelLanguage: VoiceLanguage.mixed,
+      );
+
+      expect(match, isNotNull);
+      expect(match!.recognizedText, '鲁米');
+      expect(match.resultLabel, 'lumi__zh_lu2_2');
+      expect(match.language, VoiceLanguage.zh);
     });
 
     test('keeps custom wake words separate from Lumi aliases', () {

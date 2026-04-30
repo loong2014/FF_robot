@@ -73,6 +73,9 @@ class RobotRuntime:
                 loop = None
             self._ros_state_bridge.start(loop=loop)
         for transport in self._transports:
+            register_disconnect = getattr(transport, "set_disconnect_handler", None)
+            if register_disconnect is not None:
+                register_disconnect(self._handle_transport_disconnect)
             await transport.start(self._handle_transport_chunk)
         self._state_task = asyncio.create_task(self._state_loop(), name="robot-state-loop")
         if self._debug_state_tick.enabled:
@@ -134,7 +137,38 @@ class RobotRuntime:
                     frame.seq,
                     len(frame.payload),
                 )
-            await self._control_service.handle_frame(envelope.peer_key, frame, envelope.reply)
+            try:
+                await self._control_service.handle_frame(
+                    envelope.peer_key,
+                    frame,
+                    envelope.reply,
+                )
+            except Exception:
+                LOGGER.exception(
+                    "command handling failed peer=%s type=0x%02x seq=%d",
+                    envelope.peer_key,
+                    int(frame.frame_type),
+                    frame.seq,
+                )
+
+    async def _handle_transport_disconnect(
+        self,
+        transport_name: str,
+        session_id: str,
+    ) -> None:
+        if transport_name != "ble":
+            return
+        peer_key = "%s:%s" % (transport_name, session_id)
+        LOGGER.warning("BLE peer disconnected; forcing motion stop peer=%s", peer_key)
+        try:
+            self._ros_bridge.stop_motion("BLE peer disconnected")
+        except Exception:
+            LOGGER.exception("failed to force zero velocity after BLE disconnect")
+        if self._ros_skill_bridge is not None:
+            try:
+                self._ros_skill_bridge.cancel_all()
+            except Exception:
+                LOGGER.exception("failed to cancel skill goals after BLE disconnect")
 
     async def _state_loop(self) -> None:
         seq = 0

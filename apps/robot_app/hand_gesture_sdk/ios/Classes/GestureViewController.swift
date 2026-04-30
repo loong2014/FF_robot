@@ -17,6 +17,7 @@ final class GestureViewController: UIViewController,
 
   private let captureSession = AVCaptureSession()
   private let captureQueue = DispatchQueue(label: "com.xinzhang.hand_gesture_sdk.capture")
+  private let sessionQueue = DispatchQueue(label: "com.xinzhang.hand_gesture_sdk.session")
   private let modelQueue = DispatchQueue(label: "com.xinzhang.hand_gesture_sdk.model")
   private let videoOutput = AVCaptureVideoDataOutput()
 
@@ -24,6 +25,7 @@ final class GestureViewController: UIViewController,
   private var handLandmarker: HandLandmarker?
   private var poseLandmarker: PoseLandmarker?
   private var lastStatusMessage: String = ""
+  private var lastTimestampMs = 0
   private var isSessionReady = false
 
   init(onDismiss: @escaping () -> Void) {
@@ -50,7 +52,7 @@ final class GestureViewController: UIViewController,
 
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
-    previewLayer?.frame = previewView.bounds
+    updatePreviewLayerGeometry()
   }
 
   private func configureUI() {
@@ -111,7 +113,7 @@ final class GestureViewController: UIViewController,
 
   override func viewWillDisappear(_ animated: Bool) {
     super.viewWillDisappear(animated)
-    captureSession.stopRunning()
+    stopCaptureSession()
     onDismiss()
   }
 
@@ -211,24 +213,49 @@ final class GestureViewController: UIViewController,
   }
 
   private func startCaptureSession() {
-    guard !isSessionReady else {
-      return
+    sessionQueue.async { [weak self] in
+      guard let self = self else {
+        return
+      }
+      guard !self.isSessionReady else {
+        return
+      }
+
+      guard let previewLayer = self.configureCaptureSession() else {
+        return
+      }
+
+      self.captureSession.startRunning()
+      self.isSessionReady = true
+
+      DispatchQueue.main.async {
+        self.previewView.layer.insertSublayer(previewLayer, at: 0)
+        self.previewLayer = previewLayer
+        self.updatePreviewLayerGeometry()
+        self.updateStatus("相机已就绪")
+        HandGestureSdkPlugin.publishEvent(type: "ready", message: "相机已就绪")
+        self.gestureLabel.text = "请展示手部"
+      }
     }
+  }
 
+  private func configureCaptureSession() -> AVCaptureVideoPreviewLayer? {
     captureSession.beginConfiguration()
-    captureSession.sessionPreset = .high
-
     defer {
       captureSession.commitConfiguration()
     }
+
+    captureSession.sessionPreset = .high
 
     guard
       let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
       let input = try? AVCaptureDeviceInput(device: camera),
       captureSession.canAddInput(input)
     else {
-      reportError("无法打开前置摄像头")
-      return
+      DispatchQueue.main.async {
+        self.reportError("无法打开前置摄像头")
+      }
+      return nil
     }
 
     captureSession.addInput(input)
@@ -239,24 +266,36 @@ final class GestureViewController: UIViewController,
     ]
     videoOutput.setSampleBufferDelegate(self, queue: captureQueue)
     guard captureSession.canAddOutput(videoOutput) else {
-      reportError("无法添加视频输出")
-      return
+      DispatchQueue.main.async {
+        self.reportError("无法添加视频输出")
+      }
+      return nil
     }
     captureSession.addOutput(videoOutput)
+    updateVideoOutputConnectionGeometry()
 
     let previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
     previewLayer.videoGravity = .resizeAspectFill
-    previewLayer.frame = previewView.bounds
-    previewView.layer.insertSublayer(previewLayer, at: 0)
-    self.previewLayer = previewLayer
+    return previewLayer
+  }
 
-    captureQueue.async { [weak self] in
-      self?.captureSession.startRunning()
+  private func stopCaptureSession() {
+    sessionQueue.async { [weak self] in
+      guard let self = self else {
+        return
+      }
+      guard self.isSessionReady else {
+        return
+      }
+
+      self.captureSession.stopRunning()
+      self.isSessionReady = false
+
+      DispatchQueue.main.async {
+        self.previewLayer?.removeFromSuperlayer()
+        self.previewLayer = nil
+      }
     }
-    isSessionReady = true
-    updateStatus("相机已就绪")
-    HandGestureSdkPlugin.publishEvent(type: "ready", message: "相机已就绪")
-    gestureLabel.text = "请展示手部"
   }
 
   func captureOutput(
@@ -267,16 +306,27 @@ final class GestureViewController: UIViewController,
     guard let handLandmarker = handLandmarker, let poseLandmarker = poseLandmarker else {
       return
     }
-    guard let image = try? MPImage(sampleBuffer: sampleBuffer, orientation: .up) else {
+    guard let image = try? MPImage(
+      sampleBuffer: sampleBuffer,
+      orientation: .up
+    ) else {
       return
     }
-    let timestamp = Int(CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer)) * 1000.0)
+    let timestamp = nextTimestampMs(sampleBuffer)
     do {
       try handLandmarker.detectAsync(image: image, timestampInMilliseconds: timestamp)
       try poseLandmarker.detectAsync(image: image, timestampInMilliseconds: timestamp)
     } catch {
       reportError("识别失败：\(error.localizedDescription)")
     }
+  }
+
+  private func nextTimestampMs(_ sampleBuffer: CMSampleBuffer) -> Int {
+    let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+    let candidate = Int(CMTimeGetSeconds(presentationTime) * 1000.0)
+    let next = candidate <= lastTimestampMs ? lastTimestampMs + 1 : candidate
+    lastTimestampMs = next
+    return next
   }
 
   func handLandmarker(
@@ -298,8 +348,8 @@ final class GestureViewController: UIViewController,
       return
     }
 
-    let gesture = classifyHandGesture(landmarks)
     let handedness = result?.handedness.first?.first?.categoryName
+    let gesture = classifyHandGesture(landmarks, handedness: handedness)
     let metrics = buildHandMetrics(landmarks, handedness: handedness)
     let confidence = metrics["confidence"] as? Double ?? 0.85
 
@@ -353,15 +403,20 @@ final class GestureViewController: UIViewController,
     }
   }
 
-  private func classifyHandGesture(_ landmarks: [NormalizedLandmark]) -> String {
-    let indexExtended = landmarks[8].y < landmarks[6].y
-    let middleExtended = landmarks[12].y < landmarks[10].y
-    let ringExtended = landmarks[16].y < landmarks[14].y
-    let pinkyExtended = landmarks[20].y < landmarks[18].y
-    let thumbExtended = landmarks[4].x > landmarks[3].x
+  private func classifyHandGesture(_ landmarks: [NormalizedLandmark], handedness: String?) -> String {
+    guard landmarks.count >= 21 else {
+      return "未知"
+    }
+
+    let indexExtended = isFingerExtended(landmarks, tip: 8, pip: 6, mcp: 5)
+    let middleExtended = isFingerExtended(landmarks, tip: 12, pip: 10, mcp: 9)
+    let ringExtended = isFingerExtended(landmarks, tip: 16, pip: 14, mcp: 13)
+    let pinkyExtended = isFingerExtended(landmarks, tip: 20, pip: 18, mcp: 17)
+    let thumbUp = isThumbUp(landmarks)
+    let thumbSideExtended = isThumbSideExtended(landmarks, handedness: handedness)
 
     let extendedCount = [indexExtended, middleExtended, ringExtended, pinkyExtended].filter { $0 }.count
-    let curledCount = [indexExtended, middleExtended, ringExtended, pinkyExtended].filter { !$0 }.count
+    let curledCount = 4 - extendedCount
 
     if extendedCount == 4 {
       return "张开手掌"
@@ -375,11 +430,42 @@ final class GestureViewController: UIViewController,
     if indexExtended && !middleExtended && !ringExtended && !pinkyExtended {
       return "指向"
     }
-    if thumbExtended && curledCount >= 3 {
+    if (thumbUp || thumbSideExtended) && curledCount >= 3 {
       return "点赞"
     }
 
     return "未知"
+  }
+
+  private func isFingerExtended(_ landmarks: [NormalizedLandmark], tip: Int, pip: Int, mcp: Int) -> Bool {
+    let tipPoint = landmarks[tip]
+    let pipPoint = landmarks[pip]
+    let mcpPoint = landmarks[mcp]
+    return tipPoint.y < pipPoint.y && pipPoint.y < mcpPoint.y
+  }
+
+  private func isThumbUp(_ landmarks: [NormalizedLandmark]) -> Bool {
+    let tip = landmarks[4]
+    let ip = landmarks[3]
+    let mcp = landmarks[2]
+    return tip.y < ip.y && ip.y < mcp.y
+  }
+
+  private func isThumbSideExtended(_ landmarks: [NormalizedLandmark], handedness: String?) -> Bool {
+    let tip = landmarks[4]
+    let ip = landmarks[3]
+    let mcp = landmarks[2]
+    let horizontalDelta = tip.x - mcp.x
+    let minimumDelta: Float = 0.04
+
+    if handedness == "Right" {
+      return horizontalDelta < -minimumDelta && tip.x < ip.x
+    }
+    if handedness == "Left" {
+      return horizontalDelta > minimumDelta && tip.x > ip.x
+    }
+
+    return abs(horizontalDelta) > minimumDelta
   }
 
   private func buildHandMetrics(_ landmarks: [NormalizedLandmark], handedness: String?) -> [String: Any] {
@@ -458,10 +544,10 @@ final class GestureViewController: UIViewController,
   }
 
   private func updateStatus(_ message: String) {
-    guard lastStatusMessage != message else {
-      return
-    }
     DispatchQueue.main.async {
+      guard self.lastStatusMessage != message else {
+        return
+      }
       self.lastStatusMessage = message
       self.statusLabel.text = message
       HandGestureSdkPlugin.publishEvent(type: "status", message: message)
@@ -475,5 +561,65 @@ final class GestureViewController: UIViewController,
 
   private func toPoints(_ landmarks: [NormalizedLandmark]) -> [CGPoint] {
     landmarks.map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) }
+  }
+
+  private func updatePreviewLayerGeometry() {
+    guard let previewLayer = previewLayer else {
+      return
+    }
+    previewLayer.frame = previewView.bounds
+    updateVideoOutputConnectionGeometry()
+
+    guard let connection = previewLayer.connection else {
+      return
+    }
+    if connection.isVideoOrientationSupported {
+      connection.videoOrientation = currentVideoOrientation()
+    }
+    if connection.isVideoMirroringSupported {
+      connection.automaticallyAdjustsVideoMirroring = false
+      connection.isVideoMirrored = true
+    }
+  }
+
+  private func updateVideoOutputConnectionGeometry() {
+    guard let connection = videoOutput.connection(with: .video) else {
+      return
+    }
+    if connection.isVideoOrientationSupported {
+      connection.videoOrientation = currentVideoOrientation()
+    }
+    if connection.isVideoMirroringSupported {
+      connection.automaticallyAdjustsVideoMirroring = false
+      connection.isVideoMirrored = false
+    }
+  }
+
+  private func currentVideoOrientation() -> AVCaptureVideoOrientation {
+    switch view.window?.windowScene?.interfaceOrientation {
+    case .portrait:
+      return .portrait
+    case .portraitUpsideDown:
+      return .portraitUpsideDown
+    case .landscapeLeft:
+      return .landscapeLeft
+    case .landscapeRight:
+      return .landscapeRight
+    default:
+      break
+    }
+
+    switch UIDevice.current.orientation {
+    case .portrait:
+      return .portrait
+    case .portraitUpsideDown:
+      return .portraitUpsideDown
+    case .landscapeLeft:
+      return .landscapeRight
+    case .landscapeRight:
+      return .landscapeLeft
+    default:
+      return .portrait
+    }
   }
 }
