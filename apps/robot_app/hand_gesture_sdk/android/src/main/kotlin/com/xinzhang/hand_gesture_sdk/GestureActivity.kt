@@ -39,6 +39,7 @@ class GestureActivity : AppCompatActivity() {
     private lateinit var statusLabel: TextView
     private lateinit var gestureLabel: TextView
     private lateinit var poseLabel: TextView
+    private lateinit var debugLabel: TextView
 
     private val cameraExecutor = Executors.newSingleThreadExecutor()
     private val modelExecutor = Executors.newSingleThreadExecutor()
@@ -86,6 +87,10 @@ class GestureActivity : AppCompatActivity() {
         poseLandmarker?.close()
         cameraExecutor.shutdownNow()
         modelExecutor.shutdownNow()
+        HandGestureSdkPlugin.publishEvent(
+            type = "closed",
+            message = "手势识别页已关闭"
+        )
         super.onDestroy()
     }
 
@@ -148,6 +153,13 @@ class GestureActivity : AppCompatActivity() {
         }
         overlay.addView(poseLabel)
 
+        debugLabel = TextView(this).apply {
+            setTextColor(0xFFE6FFFFFF.toInt())
+            textSize = 14f
+            text = "模式: command\n连接: none/idle\n命令: 暂无\n下发: 暂无"
+        }
+        overlay.addView(debugLabel)
+
         val closeButton = Button(this).apply {
             text = "关闭"
             setOnClickListener { finish() }
@@ -155,6 +167,27 @@ class GestureActivity : AppCompatActivity() {
         overlay.addView(closeButton)
 
         return root
+    }
+
+    fun updateDebugInfo(info: Map<String, String>) {
+        val mode = info["mode"] ?: "command"
+        val connection = info["connection"] ?: "unknown"
+        val status = info["status"] ?: ""
+        val latestGesture = info["latestGesture"] ?: "暂无"
+        val latestCommand = info["latestCommand"] ?: "暂无"
+        val latestDispatch = info["latestDispatch"] ?: "暂无"
+        val gestureDiagnostics = info["gestureDiagnostics"] ?: "暂无"
+        runOnUiThread {
+            debugLabel.text = buildString {
+                append("模式: ").append(mode).append('\n')
+                append("连接: ").append(connection).append('\n')
+                append("状态: ").append(status).append('\n')
+                append("手势: ").append(latestGesture).append('\n')
+                append("诊断: ").append(gestureDiagnostics).append('\n')
+                append("命令: ").append(latestCommand).append('\n')
+                append("下发: ").append(latestDispatch)
+            }
+        }
     }
 
     private fun hasCameraPermission(): Boolean {
@@ -339,13 +372,19 @@ class GestureActivity : AppCompatActivity() {
             runOnUiThread {
                 skeletonOverlayView.updateHandLandmarks(emptyList())
             }
+            HandGestureSdkPlugin.publishEvent(
+                type = "gesture",
+                message = "未检测到手部",
+                confidence = 0.0,
+                metrics = emptyHandMetrics()
+            )
             return
         }
 
         val handedness = result.handedness().firstOrNull()?.firstOrNull()
         val gesture = classifyHandGesture(landmarks)
         val metrics = buildHandMetrics(landmarks, handedness)
-        val confidence = handedness?.score()?.toDouble() ?: metrics["confidence"] as? Double ?: 0.85
+        val confidence = handGestureConfidence(gesture, handedness)
 
         runOnUiThread {
             gestureLabel.text = gesture
@@ -414,6 +453,15 @@ class GestureActivity : AppCompatActivity() {
         }
     }
 
+    private fun handGestureConfidence(gesture: String, handedness: Category?): Double {
+        val handScore = handedness?.score()?.toDouble() ?: 0.85
+        return if (gesture == "未知") {
+            handScore
+        } else {
+            maxOf(handScore, 0.9)
+        }
+    }
+
     private fun buildHandMetrics(
         landmarks: List<NormalizedLandmark>,
         handedness: Category?
@@ -428,13 +476,26 @@ class GestureActivity : AppCompatActivity() {
         val height = maxY - minY
 
         return mapOf(
-            "handArea" to width * height,
+            "handDetected" to true,
+            "handBBoxArea" to width * height,
             "handCenterX" to (minX + maxX) / 2.0,
             "handCenterY" to (minY + maxY) / 2.0,
             "bboxWidth" to width,
             "bboxHeight" to height,
             "handedness" to (handedness?.categoryName() ?: "unknown"),
             "confidence" to (handedness?.score()?.toDouble() ?: 0.85)
+        )
+    }
+
+    private fun emptyHandMetrics(): Map<String, Any> {
+        return mapOf(
+            "handDetected" to false,
+            "handBBoxArea" to 0.0,
+            "handCenterX" to 0.5,
+            "handCenterY" to 0.5,
+            "bboxWidth" to 0.0,
+            "bboxHeight" to 0.0,
+            "confidence" to 0.0
         )
     }
 

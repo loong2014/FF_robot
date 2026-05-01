@@ -48,6 +48,22 @@ class HandGestureSdkPlugin : FlutterPlugin, MethodCallHandler, EventChannel.Stre
                 GestureActivityRegistry.currentActivity?.finish()
                 result.success(null)
             }
+            "updateRecognitionDebugInfo" -> {
+                val info = (call.arguments as? Map<*, *>)
+                    ?.mapNotNull { entry ->
+                        val key = entry.key?.toString()
+                        val value = entry.value?.toString()
+                        if (key == null || value == null) {
+                            null
+                        } else {
+                            key to value
+                        }
+                    }
+                    ?.toMap()
+                    ?: emptyMap()
+                GestureActivityRegistry.currentActivity?.updateDebugInfo(info)
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }

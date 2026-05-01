@@ -1,4 +1,12 @@
-enum HandGestureCommandType { move, stand, sit, follow, stop, unknown }
+enum HandGestureCommandType {
+  move,
+  stand,
+  sit,
+  follow,
+  stop,
+  modeChanged,
+  unknown,
+}
 
 class HandGestureCommand {
   const HandGestureCommand({
@@ -11,6 +19,7 @@ class HandGestureCommand {
     this.source,
     this.gesture,
     this.pose,
+    this.mode,
     this.metrics,
     this.raw,
   });
@@ -24,6 +33,7 @@ class HandGestureCommand {
   final String? source;
   final String? gesture;
   final String? pose;
+  final String? mode;
   final Map<String, dynamic>? metrics;
   final Map<String, dynamic>? raw;
 
@@ -38,6 +48,7 @@ class HandGestureCommand {
     String? source,
     String? gesture,
     String? pose,
+    String? mode,
     Map<String, dynamic>? metrics,
     Map<String, dynamic>? raw,
   }) {
@@ -51,6 +62,7 @@ class HandGestureCommand {
       source: source,
       gesture: gesture,
       pose: pose,
+      mode: mode,
       metrics: metrics,
       raw: raw,
     );
@@ -62,6 +74,7 @@ class HandGestureCommand {
     String? source,
     String? gesture,
     String? pose,
+    String? mode,
     Map<String, dynamic>? metrics,
     Map<String, dynamic>? raw,
   }) {
@@ -72,6 +85,7 @@ class HandGestureCommand {
       source: source,
       gesture: gesture,
       pose: pose,
+      mode: mode,
       metrics: metrics,
       raw: raw,
     );
@@ -83,6 +97,7 @@ class HandGestureCommand {
     String? source,
     String? gesture,
     String? pose,
+    String? mode,
     Map<String, dynamic>? metrics,
     Map<String, dynamic>? raw,
   }) {
@@ -93,6 +108,7 @@ class HandGestureCommand {
       source: source,
       gesture: gesture,
       pose: pose,
+      mode: mode,
       metrics: metrics,
       raw: raw,
     );
@@ -104,6 +120,7 @@ class HandGestureCommand {
     String? source,
     String? gesture,
     String? pose,
+    String? mode,
     Map<String, dynamic>? metrics,
     Map<String, dynamic>? raw,
   }) {
@@ -114,6 +131,7 @@ class HandGestureCommand {
       source: source,
       gesture: gesture,
       pose: pose,
+      mode: mode,
       metrics: metrics,
       raw: raw,
     );
@@ -125,6 +143,7 @@ class HandGestureCommand {
     String? source,
     String? gesture,
     String? pose,
+    String? mode,
     Map<String, dynamic>? metrics,
     Map<String, dynamic>? raw,
   }) {
@@ -135,6 +154,30 @@ class HandGestureCommand {
       source: source,
       gesture: gesture,
       pose: pose,
+      mode: mode,
+      metrics: metrics,
+      raw: raw,
+    );
+  }
+
+  factory HandGestureCommand.modeChanged({
+    required String mode,
+    required String message,
+    double? confidence,
+    String? source,
+    String? gesture,
+    String? pose,
+    Map<String, dynamic>? metrics,
+    Map<String, dynamic>? raw,
+  }) {
+    return HandGestureCommand(
+      type: HandGestureCommandType.modeChanged,
+      message: message,
+      confidence: confidence,
+      source: source,
+      gesture: gesture,
+      pose: pose,
+      mode: mode,
       metrics: metrics,
       raw: raw,
     );
@@ -146,6 +189,7 @@ class HandGestureCommand {
     String? source,
     String? gesture,
     String? pose,
+    String? mode,
     Map<String, dynamic>? metrics,
     Map<String, dynamic>? raw,
   }) {
@@ -156,6 +200,7 @@ class HandGestureCommand {
       source: source,
       gesture: gesture,
       pose: pose,
+      mode: mode,
       metrics: metrics,
       raw: raw,
     );

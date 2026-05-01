@@ -36,6 +36,12 @@ abstract class HandGestureSdkPlatform extends PlatformInterface {
     throw UnimplementedError('stopRecognition() has not been implemented.');
   }
 
+  Future<void> updateRecognitionDebugInfo(Map<String, String> info) {
+    throw UnimplementedError(
+      'updateRecognitionDebugInfo() has not been implemented.',
+    );
+  }
+
   Stream<HandGestureEvent> get events {
     throw UnimplementedError('events has not been implemented.');
   }

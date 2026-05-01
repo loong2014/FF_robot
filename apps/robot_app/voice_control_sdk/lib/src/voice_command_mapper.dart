@@ -27,7 +27,29 @@ class VoiceCommandMatch {
 }
 
 class VoiceCommandMapper {
+  VoiceCommandMapper({
+    DateTime Function()? clock,
+    this.minConfidence = 0.70,
+    this.dedupeWindow = const Duration(seconds: 1),
+  }) : _clock = clock ?? (() => DateTime.now().toUtc());
+
+  final DateTime Function() _clock;
+  final double minConfidence;
+  final Duration dedupeWindow;
+
+  VoiceCommand? _lastCommand;
+  DateTime? _lastCommandAt;
+
   static final List<_CommandRule> _rules = <_CommandRule>[
+    _CommandRule(
+      command: VoiceCommand.stop,
+      phrases: const <String>[
+        '停止',
+        '停下',
+        '别动',
+        'stop',
+      ],
+    ),
     _CommandRule(
       command: VoiceCommand.standUp,
       phrases: const <String>[
@@ -43,6 +65,7 @@ class VoiceCommandMapper {
       phrases: const <String>[
         '坐下',
         '坐下来',
+        '蹲下',
         'sit down',
         'sit',
       ],
@@ -52,7 +75,11 @@ class VoiceCommandMapper {
       phrases: const <String>[
         '前进',
         '向前',
+        '往前',
+        '走',
         'forward',
+        'go forward',
+        'move forward',
       ],
     ),
     _CommandRule(
@@ -60,18 +87,75 @@ class VoiceCommandMapper {
       phrases: const <String>[
         '后退',
         '向后',
+        '往后',
         'backward',
+        'go backward',
         'go back',
         'move back',
       ],
     ),
+    _CommandRule(
+      command: VoiceCommand.left,
+      phrases: const <String>[
+        '左移',
+        '向左',
+        '往左',
+        'left',
+        'move left',
+      ],
+    ),
+    _CommandRule(
+      command: VoiceCommand.right,
+      phrases: const <String>[
+        '右移',
+        '向右',
+        '往右',
+        'right',
+        'move right',
+      ],
+    ),
   ];
+
+  VoiceCommandMatch? matchFinalTranscript(
+    String transcript, {
+    double confidence = 1.0,
+    bool bilingualCommands = true,
+  }) {
+    final match = matchTranscript(
+      transcript,
+      confidence: confidence,
+      bilingualCommands: bilingualCommands,
+      minConfidence: minConfidence,
+    );
+    if (match == null) {
+      return null;
+    }
+
+    final now = _clock();
+    if (_lastCommand == match.command &&
+        _lastCommandAt != null &&
+        now.difference(_lastCommandAt!) < dedupeWindow) {
+      return null;
+    }
+    _lastCommand = match.command;
+    _lastCommandAt = now;
+    return match;
+  }
+
+  void resetDedupe() {
+    _lastCommand = null;
+    _lastCommandAt = null;
+  }
 
   static VoiceCommandMatch? matchTranscript(
     String transcript, {
     double confidence = 1.0,
     bool bilingualCommands = true,
+    double minConfidence = 0.70,
   }) {
+    if (confidence < minConfidence) {
+      return null;
+    }
     final String normalized = _normalizeTranscript(transcript);
     if (normalized.isEmpty) {
       return null;

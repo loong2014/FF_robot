@@ -12,7 +12,7 @@
 - 唤醒后切换到 streaming ASR，持续识别到静音结束或超时。
 - 使用 Silero VAD 判断命令语音是否开始和结束。
 - 输出事件流：状态、唤醒、ASR 转写、命令、错误和遥测。
-- 输出命令事件：站立、坐下、前进、后退。
+- 输出命令事件：站起、坐下、停止、前进、后退、左移、右移。
 - 模型文件内置在插件 assets 中，运行时不需要联网下载。
 
 ## 目录结构
@@ -64,7 +64,7 @@ controller.onAsr.listen((VoiceAsrEvent event) {
 });
 
 controller.onCommand.listen((VoiceCommandEvent event) {
-  // 上层可映射到 RobotClient 控制
+  // 上层可映射到 RobotClient last-wins 控制
 });
 
 await controller.stopListening();
@@ -90,14 +90,17 @@ await controller.dispose();
 
 ## 命令映射
 
-`VoiceCommandMapper` 在 Dart 层把最终 ASR 文本解释为机器人控制命令：
+`VoiceCommandMapper` 在 Dart 层只把最终 ASR 文本解释为机器人控制命令；partial ASR 只用于 UI。低于 0.70 置信度的最终结果会丢弃，同一命令 1 秒内重复出现只触发一次。
 
 | 输入示例 | 输出 |
 | --- | --- |
 | `站起来` / `stand up` | `VoiceCommand.standUp` |
 | `坐下` / `sit down` | `VoiceCommand.sitDown` |
+| `停止` / `stop` | `VoiceCommand.stop` |
 | `前进` / `move forward` | `VoiceCommand.forward` |
 | `后退` / `go backward` | `VoiceCommand.backward` |
+| `左移` / `move left` | `VoiceCommand.left` |
+| `右移` / `move right` | `VoiceCommand.right` |
 
 SDK 只输出命令事件，不直接调用 `RobotClient`。主 App 若要真正控制机器狗，应在页面或全局服务中订阅 `VoiceController.onCommand`，再调用 `VoiceActionMapper.execute()` 或直接调用 `RobotClient`。手动语音控制应使用 `RobotClient` 默认 last-wins API；如果语音命令被用于图形化编排，必须显式使用 `*Queued` API。
 
@@ -148,8 +151,10 @@ iOS 主入口是 `ios/Classes/VoiceListeningCoordinator.swift`。
 关键实现：
 
 - 通过 `AVAudioSession.requestRecordPermission` 请求麦克风权限。
-- 使用 `AVAudioEngine.inputNode.installTap` 采集前台麦克风音频。
-- 音频以 `f32le` 单声道样本送回 Dart。
+- `AVAudioSession` 配置：`category = .playAndRecord`，`mode = .voiceChat`，`options = [.duckOthers]` 加上 BT 选项（iOS 17+ 用 `.allowBluetoothHFP`，老系统 fallback 到 `.allowBluetooth`）。`.voiceChat` 模式启用系统级 AGC、降噪与回声消除，与 Android 侧 `MediaRecorder.AudioSource.VOICE_RECOGNITION` 在语音识别场景下的语义对齐，确保 Sherpa KWS 能拿到电平稳定的输入。
+- 调用 `audioEngine.prepare()` 后再读 `inputNode.outputFormat(forBus: 0)`，规避部分 iOS 版本上首次调用拿到 0 sampleRate 的问题。
+- 麦克风硬件常以 48 kHz / 44.1 kHz 采样，Sherpa KWS / ASR / VAD 模型按 16 kHz 训练，因此 iOS 内部用 `AVAudioConverter` 把硬件 buffer 转成 `f32le` 单声道 16 kHz 后再跨平台 channel 送给 Dart。这样 sherpa-onnx 内部不会再二次重采样，`VoiceActivityDetector.acceptWaveform`（无 sampleRate 参数，按模型采样率切窗）才能正确工作。
+- 注册 `AVAudioSession.interruptionNotification` / `routeChangeNotification` / `mediaServicesWereResetNotification`：被来电、Siri、其他 App 占用、耳机插拔或系统媒体服务重置打断时，主动 stop 引擎并发出 telemetry 与 stopped 状态，避免 UI 上仍然显示 listening 但其实已经收不到音频。
 - iOS 当前只保证前台监听；不声明后台语音常驻能力。
 
 iOS 宿主 App 必须声明：
@@ -204,13 +209,13 @@ App 入口在 `apps/robot_app/lib/src/voice_module_page.dart`。
 
 当前集成方式：
 
-- 首页只提供“打开语音模块”入口。
-- `VoiceModulePage` 内部创建 `VoiceController`。
-- 用户手动点“开始监听”后才会进入待唤醒状态。
-- 页面关闭时会调用 `VoiceController.dispose()`，监听随页面生命周期停止。
-- 页面当前展示事件流和识别结果；语音命令到 `RobotClient` 的实际下发还没有接入页面主流程。
+- `HomePage` 创建并持有 App 级 `VoiceRobotController`，其中包含 `VoiceController` 和当前 `RobotClient`。
+- `VoiceModulePage` 只接收同一个 `VoiceRobotController`，负责展示状态、事件流和启动 / 停止按钮。
+- 页面关闭不会停止语音采集；用户点击“停止服务”或 App 级服务销毁才会停止。iOS 进入后台 / 失活时会释放麦克风，Android 由前台通知和停止按钮控制。
+- 语音命令通过 `RobotClient` 默认 last-wins API 执行：`stand` / `sit` / `stop` / `move`，不使用 `*Queued`。
+- 如果当前未连接机器人，语音命令会保留识别反馈但不会下发控制。
 
-因此当前版本不是全局常驻唤醒。如果产品期望在 App 主界面或任意页面都能说 `Lumi` 唤醒，需要把 `VoiceController` 提升到 App 级服务，并在 App 生命周期、权限、通知和连接状态之间做统一管理。
+首版 UI 固定唤醒词为 `Lumi`，不提供动态唤醒词、语言或灵敏度调节入口。
 
 ## 权限与平台要求
 
@@ -267,8 +272,11 @@ flutter analyze lib test
 - Android：唤醒后说“站起来 / 坐下 / 前进 / 后退”能产生 `VoiceCommandEvent`。
 - iOS：第一次启动监听时能弹出麦克风权限。
 - iOS：前台打开语音模块后能采集音频。
+- iOS：telemetry 中可观察到 `targetRate=16000 converter=true/false`，rms / peak 在正常说话距离下不应长时间为 0。
 - iOS：说 `Lumi` / `露米` 后产生 `VoiceWakeEvent`。
+- iOS：唤醒后说“站起来 / 坐下 / 前进 / 后退”能产生 `VoiceCommandEvent`。
 - iOS：锁屏、切后台或离开语音页后不会声称仍在监听。
+- iOS：监听过程中接听电话或被 Siri 打断后，事件流出现 `audio_session_interrupted` telemetry 并切换到 `stopped` 状态。
 - 关闭语音页后再次打开，模型加载和监听不应卡住。
 
 ## 常见问题
@@ -285,6 +293,7 @@ flutter analyze lib test
 - 如果出现 `sherpa_asset_missing`，检查 `voice_control_sdk/pubspec.yaml` assets 声明和模型目录名是否一致。
 - 如果状态停在“正在加载 Sherpa 模型”，优先检查设备 CPU / 内存和模型复制耗时。
 - 如果能进入“正在采集音频”但没有 `wake`，优先调低唤醒灵敏度阈值、靠近麦克风，并确认使用的是 `Lumi`、`露米` 或 `loo me` 这类已配置别名。
+- iOS 上若 telemetry 里 `rate` 不是 `16000`、或长期 `rms` 接近 0，说明系统级 AGC 没启用或 `AVAudioConverter` 没构造成功，检查 `AVAudioSession` 是否被其他 App 抢占。
 
 ### 识别到了唤醒但机器狗不动
 

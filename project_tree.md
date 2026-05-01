@@ -141,6 +141,7 @@ flutter test
 | 路径 | 说明 |
 | --- | --- |
 | `apps/robot_app/hand_gesture_sdk/lib/` | 手势 SDK Dart 代码 |
+| `apps/robot_app/hand_gesture_sdk/lib/gesture_control_state.dart` | 手势 `command` / `follow` 双模式状态机 |
 | `apps/robot_app/hand_gesture_sdk/test/` | 手势 SDK 测试 |
 | `apps/robot_app/hand_gesture_sdk/PLAN.md` | 手势模块计划 |
 

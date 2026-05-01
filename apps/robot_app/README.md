@@ -17,7 +17,8 @@
 - 首页快捷动作直控（stand / sit / stop / 常用 dog behavior）
 - 完整动作控制页展示连接状态、电量、姿态，以及全部动作 / 行为列表；点击后通过 `RobotClient.doAction` / `RobotClient.doDogBehavior` 下发
 - 手动控制页与首页快捷控制使用 `RobotClient` 默认实时语义，连续点击时只保留最后一个尚未发送的控制命令
-- 语音控制模块：基于 Sherpa ONNX 的 `KWS + ASR + VAD` 双阶段链路，先做 `Lumi` 唤醒，再持续识别到静音结束；支持中文 / 英文 / 中英混合唤醒别名，启动监听前会请求麦克风权限和 Android 13+ 通知权限，Android 前台监听，iOS 前台监听。
+- 语音控制模块：基于 Sherpa ONNX 的 `KWS + ASR + VAD` 双阶段链路，固定 `Lumi` / `鲁米` 唤醒；唤醒后只用最终 ASR 做命令匹配，支持站起、坐下、停止、前进、后退、左移、右移；App 级 `VoiceRobotController` 持有当前 `RobotClient` 并用 last-wins API 执行语音命令。Android 使用前台服务和通知停止 action，iOS 仅前台监听并在退后台 / 中断时释放麦克风。
+- 手势控制模块：`command` / `follow` 双模式手势状态机已接入当前 `RobotClient`；离散手势走 last-wins 短促控制并补零速，follow 连续移动节流到约 10Hz；原生识别页固定单一横屏，关闭后恢复 App 方向偏好。
 - 电量 / 姿态 / 最近 STATE 帧可视化
 - 动作序列编辑、执行、暂停、恢复、停止
 - 动作编排已支持 `move/stand/sit/stop` 以及 `do_action` / `do_dog_behavior`，内部走 `RobotClient.*Queued()` 保持 FIFO 顺序执行
@@ -32,7 +33,7 @@
 - 更完整的手动遥控 UI
 - 更细的错误恢复与引导
 - 用户级配置管理
-- 语音模块的 Sherpa 模型打包、资产缓存策略与唤醒误触调优
+- 语音模块的 Sherpa 模型误触调优与 iOS / Android 真机长时稳定性回归
 - 语音模块的更深层错误诊断与权限引导
 
 ## 正式遥控页说明

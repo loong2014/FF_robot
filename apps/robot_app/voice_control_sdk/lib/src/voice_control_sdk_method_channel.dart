@@ -43,6 +43,20 @@ class MethodChannelVoiceControlSdk extends VoiceControlSdkPlatform {
   }
 
   @override
+  Future<void> updateServiceState({
+    required VoiceRecognitionState state,
+    required String message,
+  }) {
+    return _methodChannel.invokeMethod<void>(
+      'updateServiceState',
+      <String, Object?>{
+        'state': state.wireName,
+        'message': message,
+      },
+    );
+  }
+
+  @override
   Stream<Map<String, Object?>> get events {
     _events ??= _eventChannel.receiveBroadcastStream().map(_mapEvent);
     return _events!;

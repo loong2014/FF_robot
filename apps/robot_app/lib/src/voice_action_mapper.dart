@@ -16,20 +16,47 @@ class VoiceActionMapper {
       case VoiceCommand.sitDown:
         await client.sit();
         return '已执行：坐下';
+      case VoiceCommand.stop:
+        await client.stop();
+        return '已执行：停止';
       case VoiceCommand.forward:
         if (executeMotionBurst) {
-          await _burstMove(client, vx: 0.32, duration: const Duration(milliseconds: 800));
+          await _burstMove(client,
+              vx: 0.32, duration: const Duration(milliseconds: 800));
           return '已执行：前进';
         }
         await client.move(0.32, 0, 0);
         return '已执行：前进';
       case VoiceCommand.backward:
         if (executeMotionBurst) {
-          await _burstMove(client, vx: -0.26, duration: const Duration(milliseconds: 800));
+          await _burstMove(client,
+              vx: -0.26, duration: const Duration(milliseconds: 800));
           return '已执行：后退';
         }
         await client.move(-0.26, 0, 0);
         return '已执行：后退';
+      case VoiceCommand.left:
+        if (executeMotionBurst) {
+          await _burstMove(
+            client,
+            vy: 0.25,
+            duration: const Duration(milliseconds: 500),
+          );
+          return '已执行：左移';
+        }
+        await client.move(0, 0.25, 0);
+        return '已执行：左移';
+      case VoiceCommand.right:
+        if (executeMotionBurst) {
+          await _burstMove(
+            client,
+            vy: -0.25,
+            duration: const Duration(milliseconds: 500),
+          );
+          return '已执行：右移';
+        }
+        await client.move(0, -0.25, 0);
+        return '已执行：右移';
       case VoiceCommand.unknown:
         throw StateError('语音命令未识别');
     }
@@ -37,10 +64,11 @@ class VoiceActionMapper {
 
   static Future<void> _burstMove(
     RobotClient client, {
-    required double vx,
+    double vx = 0,
+    double vy = 0,
     required Duration duration,
   }) async {
-    await client.move(vx, 0, 0);
+    await client.move(vx, vy, 0);
     await Future<void>.delayed(duration);
     await client.stop();
   }

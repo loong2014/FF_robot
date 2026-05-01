@@ -56,6 +56,10 @@ class VoiceControlSdkPlugin :
                 stopVoiceService()
                 result.success(null)
             }
+            "updateServiceState" -> {
+                updateVoiceServiceState(call.arguments)
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }
@@ -188,6 +192,18 @@ class VoiceControlSdkPlugin :
     private fun stopVoiceService() {
         val intent = Intent(applicationContext, VoiceListeningService::class.java).apply {
             action = VoiceListeningService.ACTION_STOP
+        }
+        applicationContext.startService(intent)
+    }
+
+    private fun updateVoiceServiceState(arguments: Any?) {
+        val args = arguments as? Map<*, *> ?: return
+        val state = args["state"]?.toString() ?: return
+        val message = args["message"]?.toString() ?: ""
+        val intent = Intent(applicationContext, VoiceListeningService::class.java).apply {
+            action = VoiceListeningService.ACTION_UPDATE
+            putExtra("state", state)
+            putExtra("message", message)
         }
         applicationContext.startService(intent)
     }

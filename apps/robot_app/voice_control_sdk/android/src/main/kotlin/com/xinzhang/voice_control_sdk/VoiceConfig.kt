@@ -5,7 +5,7 @@ import android.os.Bundle
 internal data class VoiceConfig(
     val sampleRate: Int = 16000,
     val wakeWord: String = "Lumi",
-    val sensitivity: Double = 0.65,
+    val sensitivity: Double = 0.82,
 ) {
     companion object {
         private const val KEY_SAMPLE_RATE = "sampleRate"
@@ -20,7 +20,7 @@ internal data class VoiceConfig(
             return VoiceConfig(
                 sampleRate = readInt(arguments, KEY_SAMPLE_RATE, 16000),
                 wakeWord = readString(arguments, KEY_WAKE_WORD, "Lumi"),
-                sensitivity = readDouble(arguments, KEY_SENSITIVITY, 0.65),
+                sensitivity = readDouble(arguments, KEY_SENSITIVITY, 0.82),
             )
         }
 
@@ -38,7 +38,7 @@ internal data class VoiceConfig(
                 sensitivity = if (extras.containsKey(KEY_SENSITIVITY)) {
                     extras.getDouble(KEY_SENSITIVITY)
                 } else {
-                    0.65
+                    0.82
                 },
             )
         }

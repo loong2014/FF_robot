@@ -13,6 +13,7 @@ final class GestureViewController: UIViewController,
   private let skeletonOverlayView = SkeletonOverlayView()
   private let statusLabel = UILabel()
   private let gestureLabel = UILabel()
+  private let debugLabel = UILabel()
   private let closeButton = UIButton(type: .system)
 
   private let captureSession = AVCaptureSession()
@@ -40,6 +41,18 @@ final class GestureViewController: UIViewController,
 
   deinit {
     captureSession.stopRunning()
+  }
+
+  override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+    .landscapeRight
+  }
+
+  override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
+    .landscapeRight
+  }
+
+  override var shouldAutorotate: Bool {
+    false
   }
 
   override func viewDidLoad() {
@@ -76,6 +89,13 @@ final class GestureViewController: UIViewController,
     gestureLabel.text = "等待相机开启..."
     view.addSubview(gestureLabel)
 
+    debugLabel.translatesAutoresizingMaskIntoConstraints = false
+    debugLabel.textColor = .white
+    debugLabel.numberOfLines = 0
+    debugLabel.font = .systemFont(ofSize: 14, weight: .medium)
+    debugLabel.text = "模式: command\n连接: none/idle\n命令: 暂无\n下发: 暂无"
+    view.addSubview(debugLabel)
+
     closeButton.translatesAutoresizingMaskIntoConstraints = false
     closeButton.setTitle("关闭", for: .normal)
     closeButton.setTitleColor(.white, for: .normal)
@@ -103,8 +123,33 @@ final class GestureViewController: UIViewController,
 
       gestureLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
       gestureLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-      gestureLabel.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 12)
+      gestureLabel.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 12),
+
+      debugLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+      debugLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+      debugLabel.topAnchor.constraint(equalTo: gestureLabel.bottomAnchor, constant: 12)
     ])
+  }
+
+  func updateDebugInfo(_ info: [String: String]) {
+    let mode = info["mode"] ?? "command"
+    let connection = info["connection"] ?? "unknown"
+    let status = info["status"] ?? ""
+    let latestGesture = info["latestGesture"] ?? "暂无"
+    let latestCommand = info["latestCommand"] ?? "暂无"
+    let latestDispatch = info["latestDispatch"] ?? "暂无"
+    let gestureDiagnostics = info["gestureDiagnostics"] ?? "暂无"
+    DispatchQueue.main.async {
+      self.debugLabel.text = """
+      模式: \(mode)
+      连接: \(connection)
+      状态: \(status)
+      手势: \(latestGesture)
+      诊断: \(gestureDiagnostics)
+      命令: \(latestCommand)
+      下发: \(latestDispatch)
+      """
+    }
   }
 
   @objc private func closeTapped() {
@@ -115,6 +160,10 @@ final class GestureViewController: UIViewController,
     super.viewWillDisappear(animated)
     stopCaptureSession()
     onDismiss()
+    HandGestureSdkPlugin.publishEvent(
+      type: "closed",
+      message: "手势识别页已关闭"
+    )
   }
 
   private func requestCameraPermissionIfNeeded() {
@@ -345,6 +394,12 @@ final class GestureViewController: UIViewController,
       DispatchQueue.main.async {
         self.skeletonOverlayView.updateHandLandmarks([])
       }
+      HandGestureSdkPlugin.publishEvent(
+        type: "gesture",
+        message: "未检测到手部",
+        confidence: 0,
+        metrics: emptyHandMetrics()
+      )
       return
     }
 
@@ -481,13 +536,26 @@ final class GestureViewController: UIViewController,
     let centerY = (minY + maxY) / 2
 
     return [
-      "handArea": width * height,
+      "handDetected": true,
+      "handBBoxArea": width * height,
       "handCenterX": centerX,
       "handCenterY": centerY,
       "bboxWidth": width,
       "bboxHeight": height,
       "handedness": handedness ?? "unknown",
       "confidence": 0.9
+    ]
+  }
+
+  private func emptyHandMetrics() -> [String: Any] {
+    return [
+      "handDetected": false,
+      "handBBoxArea": 0.0,
+      "handCenterX": 0.5,
+      "handCenterY": 0.5,
+      "bboxWidth": 0.0,
+      "bboxHeight": 0.0,
+      "confidence": 0.0
     ]
   }
 

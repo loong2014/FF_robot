@@ -175,6 +175,25 @@
   - `robot_server/robot_server/ros/bridge.py`：新增 `stop_motion()`，用于不依赖 BLE 补发 `STOP` 的服务端安全停止。
   - 测试：新增 / 更新 `apps/robot_app/test/control_page_test.dart`、`mobile_sdk/test/robot_client_connection_test.dart`、`robot_server/tests/test_ble_characteristic.py`、`robot_server/tests/test_robot_runtime.py` 覆盖断连停止发送、重入运动模式、命令写入异常不重连、BLE 断开安全停止和单帧处理异常隔离。
   - 剩余风险：当前 BLE STATE 仍只有 battery / roll / pitch / yaw，没有真机“运行模式”字段；本轮采用保守重发 `enterMotionMode()`，如果后续需要精确判断，需要扩展 STATE / event 或增加 ROS 状态映射。
+- ✅ **Milestone 12 / 手势 SDK MVP 第一版**（2026-05-01）：
+  - `apps/robot_app/hand_gesture_sdk/lib/gesture_control_state.dart`：新增 `command` / `follow` 双模式状态机；`command` 模式实现张开手掌 2s 进入 `follow`、握拳停止移动、指向按画面左右位置横移，其它手势不处理；`follow` 模式实现握拳停止 / 2s 回 `command`、面积前后跟随、x 横移、组合死区、面积熔断与 2s 恢复、200ms 横向抑制。
+  - `GestureCommandInterpreter` 改为只委托状态机；旧 `_followHold`、350ms 冷却、`handArea` baseline ratio 和“胜利 900ms 进入 follow”路径已删除。
+  - Android / iOS 原生 hand metrics 改为输出 `handDetected`、`handBBoxArea`、`handCenterX`、`handCenterY`、`bboxWidth`、`bboxHeight`；Dart 状态机不读取旧 `handArea`。
+  - 手势原生识别页固定单一横屏：Android `GestureActivity` 使用 `landscape`，iOS `GestureViewController` 使用 `.landscapeRight` 且不自动旋转；关闭识别页时发送 `closed` 事件，App 侧恢复方向偏好。
+  - 原生相机识别页通过 `updateRecognitionDebugInfo` 接收 Flutter 侧状态，并在 overlay 显示当前手势模式、`RobotClient` 连接状态、最新手势 / 命令和最近下发结果，用于排查“识别成功但机器狗未运动”。
+  - `apps/robot_app/lib/src/gesture_module_page.dart` 接收当前 `RobotClient`，手势命令走 last-wins；握拳停止映射为零速 `move(0,0,0)` 而不是急停 / recovery 型 `stop()`，离散 move 短促后补零速，follow 连续 move 节流到约 10Hz；首页打开手势页时传入 `_client`。
+  - 测试：`apps/robot_app/hand_gesture_sdk/test/gesture_control_state_test.dart` 覆盖张开手掌 2s 进 `follow`、`follow` 下张开手掌不重复切换、握拳停止 / 2s 回 `command`、其它手势忽略、follow area/x、组合死区、熔断恢复、横向抑制和指向左右位置横移。
+  - 剩余风险：本轮只完成 Dart / Flutter 单测与静态检查；Android / iOS 真机相机方向、手势稳定性和真机控制方向仍需设备联调确认。
+- ✅ **Milestone 13 / 语音控制 SDK MVP 第一版**（2026-05-02）：
+  - `apps/robot_app/voice_control_sdk/lib/src/voice_session_state.dart`：新增单一会话状态机，首版主状态收敛为 `waiting_for_wake` / `active_listening` / `processing_command`；唤醒防抖 2s、VAD 静音 5s、无语音 5s、最长活跃 12s、300ms 噪声过滤均由状态机统一处理。
+  - `VoiceConfig` 默认值收敛为 `wakeWord=Lumi`、`sampleRate=16000`、`wakeDebounce=2s`、`vadSilence=5s`、`activeNoSpeechTimeout=5s`、`maxActiveDuration=12s`；`VoiceRecognitionState` 新增 `waitingForWake` / `processingCommand`；`VoiceCommand` 新增 `stop` / `left` / `right`。
+  - `VoiceWakeMapper` 固定为 Lumi / lumi / loo me / lu mi / 鲁米 / 露米 / 卢米 / 噜米；`VoiceCommandMapper` 按首版关键词表匹配停止、站起、坐下、前进、后退、左移、右移，并加入低置信度丢弃与 1s 同命令去重。
+  - `SherpaVoiceBackend` 委托状态机处理 KWS / ASR / VAD 阶段切换；partial ASR 只发 UI 事件，最终 ASR 才匹配命令；完成或超时后直接回 `waiting_for_wake`，不再对外输出旧 `listening` / `cooldown` 主状态。
+  - `apps/robot_app/lib/src/voice_robot_controller.dart`：新增 App 级控制器，持有同一个 `VoiceController` 与当前 `RobotClient`；语音命令用 last-wins `stand/sit/stop/move` 执行，移动命令按首版持续时间后补 `stop`；未连接时只反馈“不执行”。
+  - `VoiceModulePage` 改为纯状态面板和启动 / 停止控制面板；移除唤醒词输入框、动态语言和灵敏度控件；`HomePage` 持有同一个 `VoiceRobotController` 并在 iOS 退后台 / 失活时释放语音服务。
+  - Android 原生 `VoiceListeningService` 补前台通知停止 action、音频焦点、异常重启计数、资源释放和 `VOICE_RECOGNITION` 16kHz mono pcm16le 事件；iOS 原生 `VoiceListeningCoordinator` 使用 `playAndRecord + voiceChat + duckOthers`、`AVAudioEngine.inputNode.installTap`、`AVAudioConverter` 输出 16kHz mono f32le，并处理中断、路由变化、媒体服务重置和退后台释放。
+  - 测试：`voice_control_sdk` 20/20 单测通过；`apps/robot_app` Flutter 单测通过；`flutter analyze` 两个包均通过；Android debug APK 和 iOS no-codesign debug build 均通过。
+  - 剩余风险：本轮未做 iOS / Android 真机麦克风长时监听、通知 action 手动点击、来电 / 蓝牙路由 / 系统录音抢占等设备级验收；Sherpa final ASR 当前无真实置信度输出，代码按 1.0 处理并保留低置信度过滤入口。
 - ✅ **Milestone 1 / Python 3.8 基座对齐**（见 P0-1）
 - ✅ **Milestone 2.2 / BLE 端到端**（见 P0-3，客户端基础链路已验，稳定性回归待补）
 - ✅ **Milestone 3 / SDK 统一连接管理**（`RobotConnectionState` + `connectionState` Stream + `switchTransport` + 默认无重连策略，测试覆盖优先级/失败/切换/BLE 保留，见 `mobile_sdk/test/robot_client_connection_test.dart`）

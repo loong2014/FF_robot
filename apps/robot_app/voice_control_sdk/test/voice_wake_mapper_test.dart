@@ -20,12 +20,12 @@ void main() {
       expect(grammar, contains('露米'));
       expect(grammar, contains('卢米'));
       expect(grammar, contains('鲁米'));
-      expect(grammar, contains('鹿米'));
-      expect(grammar, contains('陆米'));
+      expect(grammar, contains('噜米'));
       expect(grammar, contains('lu mi'));
       expect(keywords, contains('@lumi__en_main'));
-      expect(keywords, contains('@lumi__zh_lu4'));
+      expect(keywords, contains('@lumi__zh_lu3'));
       expect(keywords, contains('L UW1 M IY0 @lumi__en_main'));
+      expect(keywords, contains('l ǔ m ǐ @lumi__zh_lu3'));
       expect(keywords, contains('l ù m ǐ @lumi__zh_lu4'));
       expect(keywords, contains('l ú m ǐ @lumi__zh_lu2'));
       expect(keywords, isNot(contains('露 米')));
@@ -83,40 +83,39 @@ void main() {
       expect(match, isNotNull);
       expect(match!.wakeWord, 'Lumi');
       expect(match.recognizedText, '鲁米');
-      expect(match.resultLabel, 'lumi__zh_lu2_2');
+      expect(match.resultLabel, 'lumi__zh_lu3');
       expect(match.language, VoiceLanguage.zh);
       expect(match.normalizedText, '鲁米');
     });
 
     test('matches sherpa labels with optional at prefix', () {
       final match = VoiceWakeMapper.matchResultLabel(
-        '@lumi__zh_lu2_2',
+        '@lumi__zh_lu3',
         wakeWord: 'Lumi',
         modelLanguage: VoiceLanguage.mixed,
       );
 
       expect(match, isNotNull);
       expect(match!.recognizedText, '鲁米');
-      expect(match.resultLabel, 'lumi__zh_lu2_2');
+      expect(match.resultLabel, 'lumi__zh_lu3');
       expect(match.language, VoiceLanguage.zh);
     });
 
-    test('keeps custom wake words separate from Lumi aliases', () {
+    test('keeps wake grammar fixed to Lumi aliases', () {
       final grammar = VoiceWakeMapper.buildGrammar(
         wakeWord: 'Hello Robot',
         modelLanguage: VoiceLanguage.mixed,
       );
 
-      expect(grammar, contains('Hello Robot'));
-      expect(grammar.where((item) => item.toLowerCase().contains('lumi')),
-          isEmpty);
+      expect(grammar, isNot(contains('Hello Robot')));
+      expect(grammar, contains('Lumi'));
       expect(
         VoiceWakeMapper.matchTranscript(
           'hello robot',
           wakeWord: 'Hello Robot',
           modelLanguage: VoiceLanguage.mixed,
         ),
-        isNotNull,
+        isNull,
       );
     });
   });

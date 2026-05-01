@@ -19,8 +19,10 @@ void main() {
       expect(config.wakeWord, 'Lumi');
       expect(config.sensitivity, 0.82);
       expect(config.preRoll.inMilliseconds, 500);
-      expect(config.vadSilence.inMilliseconds, 700);
+      expect(config.wakeDebounce.inSeconds, 2);
+      expect(config.vadSilence.inSeconds, 5);
       expect(config.activeNoSpeechTimeout.inSeconds, 5);
+      expect(config.maxActiveDuration.inSeconds, 12);
 
       final roundTrip = VoiceConfig.fromMap(config.toMap());
       expect(roundTrip.engine, VoiceEngineType.sherpa);
@@ -40,6 +42,8 @@ void main() {
       );
       expect(roundTrip.sampleRate, 16000);
       expect(roundTrip.activeNoSpeechTimeout.inSeconds, 5);
+      expect(roundTrip.vadSilence.inSeconds, 5);
+      expect(roundTrip.maxActiveDuration.inSeconds, 12);
     });
   });
 

@@ -5,10 +5,10 @@ enum VoiceEngineType { sherpa, native, unknown }
 enum VoiceRecognitionState {
   stopped,
   starting,
-  listening,
+  waitingForWake,
   wakeDetected,
   activeListening,
-  cooldown,
+  processingCommand,
   error,
 }
 
@@ -16,7 +16,16 @@ enum VoiceEventSource { android, ios, unknown }
 
 enum VoiceLanguage { zh, en, mixed, unknown }
 
-enum VoiceCommand { standUp, sitDown, forward, backward, unknown }
+enum VoiceCommand {
+  standUp,
+  sitDown,
+  stop,
+  forward,
+  backward,
+  left,
+  right,
+  unknown,
+}
 
 extension VoiceEngineTypeWire on VoiceEngineType {
   String get wireName => switch (this) {
@@ -30,10 +39,10 @@ extension VoiceRecognitionStateWire on VoiceRecognitionState {
   String get wireName => switch (this) {
         VoiceRecognitionState.stopped => 'stopped',
         VoiceRecognitionState.starting => 'starting',
-        VoiceRecognitionState.listening => 'listening',
+        VoiceRecognitionState.waitingForWake => 'waiting_for_wake',
         VoiceRecognitionState.wakeDetected => 'wake_detected',
         VoiceRecognitionState.activeListening => 'active_listening',
-        VoiceRecognitionState.cooldown => 'cooldown',
+        VoiceRecognitionState.processingCommand => 'processing_command',
         VoiceRecognitionState.error => 'error',
       };
 }
@@ -59,8 +68,11 @@ extension VoiceCommandWire on VoiceCommand {
   String get wireName => switch (this) {
         VoiceCommand.standUp => 'stand_up',
         VoiceCommand.sitDown => 'sit_down',
+        VoiceCommand.stop => 'stop',
         VoiceCommand.forward => 'forward',
         VoiceCommand.backward => 'backward',
+        VoiceCommand.left => 'left',
+        VoiceCommand.right => 'right',
         VoiceCommand.unknown => 'unknown',
       };
 }
@@ -82,14 +94,14 @@ VoiceRecognitionState voiceRecognitionStateFromWire(String? value) {
       return VoiceRecognitionState.stopped;
     case 'starting':
       return VoiceRecognitionState.starting;
-    case 'listening':
-      return VoiceRecognitionState.listening;
+    case 'waiting_for_wake':
+      return VoiceRecognitionState.waitingForWake;
     case 'wake_detected':
       return VoiceRecognitionState.wakeDetected;
     case 'active_listening':
       return VoiceRecognitionState.activeListening;
-    case 'cooldown':
-      return VoiceRecognitionState.cooldown;
+    case 'processing_command':
+      return VoiceRecognitionState.processingCommand;
     case 'error':
       return VoiceRecognitionState.error;
     default:
@@ -127,10 +139,16 @@ VoiceCommand voiceCommandFromWire(String? value) {
       return VoiceCommand.standUp;
     case 'sit_down':
       return VoiceCommand.sitDown;
+    case 'stop':
+      return VoiceCommand.stop;
     case 'forward':
       return VoiceCommand.forward;
     case 'backward':
       return VoiceCommand.backward;
+    case 'left':
+      return VoiceCommand.left;
+    case 'right':
+      return VoiceCommand.right;
     default:
       return VoiceCommand.unknown;
   }
@@ -493,13 +511,13 @@ class VoiceConfig {
     this.engine = VoiceEngineType.sherpa,
     this.wakeWord = 'Lumi',
     this.sensitivity = 0.82,
-    this.wakeDebounce = const Duration(milliseconds: 1200),
+    this.wakeDebounce = const Duration(seconds: 2),
     this.modelLanguage = VoiceLanguage.mixed,
     this.sampleRate = 16000,
     this.preRoll = const Duration(milliseconds: 500),
-    this.vadSilence = const Duration(milliseconds: 700),
+    this.vadSilence = const Duration(seconds: 5),
     this.activeNoSpeechTimeout = const Duration(seconds: 5),
-    this.maxActiveDuration = const Duration(seconds: 8),
+    this.maxActiveDuration = const Duration(seconds: 12),
     this.kwsAssetBasePath =
         'packages/voice_control_sdk/assets/voice_models/kws/sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20',
     this.asrAssetBasePath =
@@ -549,7 +567,7 @@ class VoiceConfig {
       wakeWord: (map['wakeWord'] ?? map['wake_word'] ?? 'Lumi').toString(),
       sensitivity: _readDouble(map, 'sensitivity', fallback: 0.82),
       wakeDebounce: Duration(
-        milliseconds: _readInt(map, 'wakeDebounceMs', fallback: 1200),
+        milliseconds: _readInt(map, 'wakeDebounceMs', fallback: 2000),
       ),
       modelLanguage: voiceLanguageFromWire(
         map['modelLanguage'] as String? ?? map['language'] as String?,
@@ -558,12 +576,12 @@ class VoiceConfig {
       preRoll:
           Duration(milliseconds: _readInt(map, 'preRollMs', fallback: 500)),
       vadSilence:
-          Duration(milliseconds: _readInt(map, 'vadSilenceMs', fallback: 700)),
+          Duration(milliseconds: _readInt(map, 'vadSilenceMs', fallback: 5000)),
       activeNoSpeechTimeout: Duration(
         milliseconds: _readInt(map, 'activeNoSpeechTimeoutMs', fallback: 5000),
       ),
       maxActiveDuration: Duration(
-        milliseconds: _readInt(map, 'maxActiveDurationMs', fallback: 8000),
+        milliseconds: _readInt(map, 'maxActiveDurationMs', fallback: 12000),
       ),
       kwsAssetBasePath: _readString(
             map,

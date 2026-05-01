@@ -4,4 +4,5 @@ export 'src/voice_controller.dart';
 export 'src/voice_control_sdk_method_channel.dart';
 export 'src/voice_control_sdk_platform_interface.dart';
 export 'src/voice_models.dart';
+export 'src/voice_session_state.dart';
 export 'src/voice_wake_mapper.dart';

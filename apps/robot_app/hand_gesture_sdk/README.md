@@ -10,7 +10,7 @@
 - 通过 MediaPipe 识别手势：张开手掌、握拳、胜利、指向、点赞。
 - 通过 MediaPipe 识别基础姿态：站起、蹲下。
 - 输出原始事件流：状态、手势、姿态、置信度和几何 metrics。
-- 输出命令建议流：`move`、`stand`、`sit`、`follow`、`stop`。
+- 输出命令建议流：`move`、`modeChanged`、`stop`。
 - 内置模型文件，运行时不需要联网下载模型。
 
 ## 目录结构
@@ -21,7 +21,8 @@ hand_gesture_sdk/
 │   ├── hand_gesture_sdk.dart                    # Dart 对外入口
 │   ├── hand_gesture_sdk_event.dart              # 原始事件模型
 │   ├── hand_gesture_sdk_command.dart            # 命令建议模型
-│   ├── hand_gesture_sdk_command_interpreter.dart # 事件到命令建议的解释器
+│   ├── gesture_control_state.dart               # command / follow 双模式状态机
+│   ├── hand_gesture_sdk_command_interpreter.dart # 只委托状态机的解释器
 │   ├── hand_gesture_sdk_method_channel.dart     # Flutter MethodChannel / EventChannel 实现
 │   └── hand_gesture_sdk_platform_interface.dart # 平台接口
 ├── android/src/main/kotlin/.../
@@ -68,26 +69,27 @@ sdk.commands.listen((HandGestureCommand command) {
 | `gesture` | 手势名称，例如 `张开手掌`、`握拳`、`胜利` |
 | `pose` | 姿态名称，例如 `站起`、`蹲下` |
 | `confidence` | 置信度，平台侧可选输出 |
-| `metrics` | 几何指标，例如手部面积、中心点、关键角度 |
+| `metrics` | 几何指标，例如 `handDetected`、`handBBoxArea`、手部中心点、bbox 宽高 |
 | `raw` | 原始 Map，便于调试和扩展 |
 
 iOS / Android 原生侧通过 `EventChannel("hand_gesture_sdk/events")` 推送事件，Dart 侧在 `hand_gesture_sdk_method_channel.dart` 中转成 `HandGestureEvent`。
 
 ## 命令建议
 
-`GestureCommandInterpreter` 在 Dart 层把原始事件解释为机器人控制建议：
+`GestureCommandInterpreter` 在 Dart 层只委托 `GestureControlState`。状态机实现 `command` / `follow` 双模式，默认 `command`，不保留旧解释器的 350ms 冷却、面积 baseline ratio 触发或“胜利 900ms 进入 follow”路径。
 
 | 输入 | 输出 |
 | --- | --- |
-| `gesture == 握拳` | `HandGestureCommand.stop(message: "握拳停止")` |
-| `gesture == 胜利` 且持续约 900ms | `follow` |
-| `gesture == 张开手掌` 且手部面积变大 | `move`，表示接近 |
-| `gesture == 张开手掌` 且手部面积变小 | `move`，表示远离 |
-| `gesture == 张开手掌` 且手部中心偏左 / 偏右 | `move`，表示平移左 / 平移右 |
-| `pose == 站起` | `stand` |
-| `pose == 蹲下` | `sit` |
+| `command` 模式：`张开手掌` 高置信连续保持 2s | `modeChanged(follow)`，只切模式，不发运动命令；已在 `follow` 时不重复进入 |
+| `command` 模式：`握拳` 高置信 | `HandGestureCommand.stop(message: "握拳停止移动")`；App 层映射为零速 `move(0,0,0)`，不是急停 |
+| `command` 模式：`指向` 高置信且手部中心在画面左侧 / 右侧 | `move(vy: +/-0.25)`，上层短促执行后补零速；中心死区不输出 |
+| `command` 模式：`胜利`、OK、点赞、一指、两指、三指等其它手势 | 不处理，不切模式、不下发运动 |
+| `follow` 模式：`握拳` 高置信 | 立即 `stop`，App 层映射为零速 `move(0,0,0)` |
+| `follow` 模式：`握拳` 高置信连续保持 2s | `modeChanged(command)`，只切模式，不发运动命令 |
+| `follow` 模式：手部面积偏离中性面积 | 连续 `move(vx)`，面积变大前进，面积变小后退 |
+| `follow` 模式：手部中心 x 偏离横向死区 | 连续 `move(vy)`，画面左侧 `vy > 0`、画面右侧 `vy < 0` |
 
-解释器包含 350ms 命令冷却时间，避免连续帧反复触发同一个动作。SDK 只输出建议，不直接调用 `RobotClient`。
+`command` 模式首版只处理张开手掌、握拳和指向三类输入，避免胜利手势在 iOS 侧识别成功但无法稳定切换模式的问题。`follow` 模式持续输出 `move` 或零速 `move(0,0,0)`，包含面积熔断、2s 恢复和 200ms 横向抑制。SDK 只输出建议，不直接调用 `RobotClient`。
 
 ## 技术架构
 
@@ -115,6 +117,7 @@ Android 主入口是 `android/src/main/kotlin/com/xinzhang/hand_gesture_sdk/Gest
 关键实现：
 
 - 使用 CameraX `Preview` + `ImageAnalysis`，默认前置摄像头。
+- `GestureActivity` 固定为单一横屏 `landscape`，避免左右横屏自动旋转导致相机和 overlay 方向处理复杂化。
 - `ImageAnalysis` 输出 RGBA buffer，按 `imageProxy.imageInfo.rotationDegrees` 先旋正 Bitmap。
 - MediaPipe 使用 `RunningMode.VIDEO`，在 `modelExecutor` 中串行推理。
 - `SkeletonOverlayView` 在预览之上绘制手部和人体关键点。
@@ -129,6 +132,7 @@ iOS 主入口是 `ios/Classes/GestureViewController.swift`。
 关键实现：
 
 - 使用 `AVCaptureSession` + `AVCaptureVideoDataOutput` 采集前置摄像头。
+- `GestureViewController` 固定为 `.landscapeRight`，`shouldAutorotate = false`；关闭识别页后由 App 侧释放方向限制。
 - session 配置和 `startRunning()` 必须走 `sessionQueue` 串行执行。
 - `beginConfiguration()` / `commitConfiguration()` 必须完成后才能调用 `startRunning()`。
 - `AVCaptureVideoDataOutput` 的 `videoOrientation` 会同步为当前界面方向。
@@ -183,8 +187,10 @@ App 入口在 `apps/robot_app/lib/src/gesture_module_page.dart`。
 
 - 页面订阅 `HandGestureSdk.instance.events` 展示原始事件。
 - 页面订阅 `HandGestureSdk.instance.commands` 展示命令建议。
-- 如果要真正控制机器狗，上层应把 `HandGestureCommand` 映射到 `mobile_sdk.RobotClient`。
-- 手动控制仍应使用 `RobotClient` 默认 last-wins API；如果用于图形化编排，必须显式使用 `*Queued` API。
+- Flutter 手势模块页与原生相机识别页都会展示当前手势模式（`command` / `follow`）、`RobotClient` 连接状态、手势置信度 / 中心点 / 左中右位置诊断和最近一次机器人命令下发结果，便于排查“识别成功但机器狗未运动”的问题。
+- `GestureModulePage` 接收当前 `RobotClient`，并把 `HandGestureCommand` 映射到 `RobotClient` 默认 last-wins API。
+- `follow` 连续 `move` 在 App 层节流到约 10Hz；手势属于实时手动控制，不使用 `*Queued`。
+- 原生识别页关闭时会发 `type == closed` 事件；App 收到后恢复 `SystemChrome` 方向偏好，避免横屏约束泄漏到其它页面。
 
 ## 权限与平台要求
 
@@ -265,6 +271,6 @@ flutter devices
 - 不要让 SDK 直接依赖 `mobile_sdk.RobotClient`；SDK 只输出视觉事件和命令建议。
 - 不要在 Dart 层绕过平台 channel 直接做相机逻辑。
 - 修改 iOS 相机方向时，同步验证 preview、MediaPipe 输入和 overlay 三者。
-- 修改手势名称时，同步更新 `GestureCommandInterpreter` 和测试。
-- 修改事件字段时，保持 `HandGestureEvent.fromMap` 向后兼容。
-- 修改命令建议节流参数时，补充 `hand_gesture_sdk_command_interpreter_test.dart`。
+- 修改手势名称时，同步更新 `GestureControlState` 和测试。
+- 修改事件字段时，同步 Android / iOS metrics 契约与 `HandGestureEvent.fromMap`。
+- 修改命令建议节流参数时，补充 `gesture_control_state_test.dart`。

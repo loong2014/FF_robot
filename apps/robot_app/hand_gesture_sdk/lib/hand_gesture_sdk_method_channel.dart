@@ -14,7 +14,9 @@ class MethodChannelHandGestureSdk extends HandGestureSdkPlatform {
 
   @override
   Future<String?> getPlatformVersion() async {
-    final version = await methodChannel.invokeMethod<String>('getPlatformVersion');
+    final version = await methodChannel.invokeMethod<String>(
+      'getPlatformVersion',
+    );
     return version;
   }
 
@@ -29,15 +31,17 @@ class MethodChannelHandGestureSdk extends HandGestureSdkPlatform {
   }
 
   @override
+  Future<void> updateRecognitionDebugInfo(Map<String, String> info) {
+    return methodChannel.invokeMethod<void>('updateRecognitionDebugInfo', info);
+  }
+
+  @override
   Stream<HandGestureEvent> get events {
     return eventChannel.receiveBroadcastStream().map((event) {
       if (event is Map) {
         return HandGestureEvent.fromMap(event);
       }
-      return HandGestureEvent(
-        type: 'status',
-        message: event?.toString() ?? '',
-      );
+      return HandGestureEvent(type: 'status', message: event?.toString() ?? '');
     });
   }
 }

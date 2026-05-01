@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_sdk/mobile_sdk.dart';
 
@@ -16,6 +17,7 @@ import 'mqtt_connect_dialog.dart';
 import 'quick_control_panel.dart';
 import 'skill_control_page.dart';
 import 'voice_module_page.dart';
+import 'voice_robot_controller.dart';
 import 'tcp_connect_dialog.dart';
 
 class HomePage extends StatefulWidget {
@@ -32,12 +34,14 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final RobotClient _client =
       widget.client ?? RobotClient(reconnectPolicy: const BleReconnectPolicy());
   late final BleDeviceStore _bleDeviceStore =
       widget.bleDeviceStore ?? SharedPreferencesBleDeviceStore();
   late final ActionEngine _engine = ActionEngine(_client);
+  late final VoiceRobotController _voiceRobotController =
+      VoiceRobotController(client: _client);
   late final List<ActionStep> _initialProgram = <ActionStep>[
     ActionStep.stand(),
     ActionStep.doDogBehavior(behavior: DogBehavior.waveHand),
@@ -71,6 +75,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _stateSubscription = _client.stateStream.listen((state) {
       setState(() {
         _latestState = state;
@@ -114,14 +119,28 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     unawaited(_stateSubscription?.cancel());
     unawaited(_frameSubscription?.cancel());
     unawaited(_statusSubscription?.cancel());
     unawaited(_connectionSubscription?.cancel());
     unawaited(_errorSubscription?.cancel());
     unawaited(_engine.dispose());
+    unawaited(_voiceRobotController.dispose());
     unawaited(_client.dispose());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (defaultTargetPlatform != TargetPlatform.iOS) {
+      return;
+    }
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      unawaited(_voiceRobotController.stop());
+    }
   }
 
   @override
@@ -629,7 +648,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _openGestureModulePage() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => const GestureModulePage(),
+        builder: (_) => GestureModulePage(client: _client),
       ),
     );
   }
@@ -637,7 +656,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _openVoiceModulePage() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) => const VoiceModulePage(),
+        builder: (_) => VoiceModulePage(controller: _voiceRobotController),
       ),
     );
   }

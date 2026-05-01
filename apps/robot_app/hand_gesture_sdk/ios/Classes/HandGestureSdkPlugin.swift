@@ -33,6 +33,9 @@ public class HandGestureSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
     case "stopRecognition":
       stopRecognition()
       result(nil)
+    case "updateRecognitionDebugInfo":
+      updateRecognitionDebugInfo(call.arguments)
+      result(nil)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -79,6 +82,13 @@ public class HandGestureSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandler
     DispatchQueue.main.async { [weak self] in
       self?.gestureViewController?.dismiss(animated: true)
       self?.gestureViewController = nil
+    }
+  }
+
+  private func updateRecognitionDebugInfo(_ arguments: Any?) {
+    let info = arguments as? [String: String] ?? [:]
+    DispatchQueue.main.async { [weak self] in
+      self?.gestureViewController?.updateDebugInfo(info)
     }
   }
 

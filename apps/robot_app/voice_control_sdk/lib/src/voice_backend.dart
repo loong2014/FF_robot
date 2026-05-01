@@ -11,6 +11,7 @@ import 'package:sherpa_onnx/sherpa_onnx.dart';
 import 'voice_command_mapper.dart';
 import 'voice_control_sdk_platform_interface.dart';
 import 'voice_models.dart';
+import 'voice_session_state.dart';
 import 'voice_wake_mapper.dart';
 
 abstract class VoiceBackend {
@@ -67,17 +68,12 @@ class SherpaVoiceBackend implements VoiceBackend {
   bool _listening = false;
   bool _activeListening = false;
   bool _sherpaInitialized = false;
-  bool _speechDetected = false;
   int _generation = 0;
-  Timer? _cooldownTimer;
-
-  DateTime _wakeDebounceUntil =
-      DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-  Duration _silenceDuration = Duration.zero;
-  DateTime _activeStartedAt =
-      DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
   DateTime _lastAudioTelemetryAt =
       DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  late VoiceSessionStateMachine _session =
+      VoiceSessionStateMachine(config: _config);
+  late VoiceCommandMapper _commandMapper = VoiceCommandMapper();
 
   KeywordSpotter? _keywordSpotter;
   OnlineRecognizer? _asrRecognizer;
@@ -118,8 +114,10 @@ class SherpaVoiceBackend implements VoiceBackend {
     final int generation = ++_generation;
     try {
       await _stopRuntime(emitStopped: false);
-      _config = config;
-      _wakeDebounceUntil = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      _config = config.copyWith(wakeWord: 'Lumi');
+      _session = VoiceSessionStateMachine(config: _config);
+      _commandMapper = VoiceCommandMapper();
+      _session.markStarting();
       _events.add(
         VoiceStateEvent(
           timestamp: DateTime.now().toUtc(),
@@ -138,15 +136,16 @@ class SherpaVoiceBackend implements VoiceBackend {
       );
 
       await _ensureSherpaInitialized();
-      final _SherpaModelPaths paths = await _prepareModelPaths(config);
-      _createModels(paths, config);
+      final _SherpaModelPaths paths = await _prepareModelPaths(_config);
+      _createModels(paths, _config);
       _listenToPlatformEvents();
-      await _platform.startListening(config: config);
+      await _platform.startListening(config: _config);
       _listening = true;
+      _session.markWaitingForWake();
       _emitState(
         generation: generation,
-        state: VoiceRecognitionState.listening,
-        message: '正在等待唤醒词 ${config.wakeWord}',
+        state: VoiceRecognitionState.waitingForWake,
+        message: _session.messageFor(VoiceRecognitionState.waitingForWake),
         listening: true,
         activeListening: false,
       );
@@ -159,7 +158,7 @@ class SherpaVoiceBackend implements VoiceBackend {
       _emitState(
         generation: generation,
         state: VoiceRecognitionState.error,
-        message: _mapErrorRecoveryHint(error),
+        message: _session.messageFor(VoiceRecognitionState.error),
         listening: false,
         activeListening: false,
       );
@@ -189,8 +188,7 @@ class SherpaVoiceBackend implements VoiceBackend {
     final int generation = ++_generation;
     _listening = false;
     _activeListening = false;
-    _speechDetected = false;
-    _silenceDuration = Duration.zero;
+    _session.stop();
     _lastAsrText = null;
     _lastFinalAsrText = null;
     _preRoll = <_AudioChunk>[];
@@ -198,8 +196,6 @@ class SherpaVoiceBackend implements VoiceBackend {
     _audioChunkCount = 0;
     _audioSampleCount = 0;
     _lastAudioTelemetryAt = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-    _cooldownTimer?.cancel();
-    _cooldownTimer = null;
     await _platformSubscription?.cancel();
     _platformSubscription = null;
 
@@ -220,7 +216,7 @@ class SherpaVoiceBackend implements VoiceBackend {
       _emitState(
         generation: generation,
         state: VoiceRecognitionState.stopped,
-        message: '已停止监听',
+        message: _session.messageFor(VoiceRecognitionState.stopped),
         listening: false,
         activeListening: false,
         allowStale: true,
@@ -310,11 +306,8 @@ class SherpaVoiceBackend implements VoiceBackend {
           sileroVad: SileroVadModelConfig(
             model: paths.vadModelPath,
             threshold: 0.5,
-            minSilenceDuration: max(
-              config.vadSilence.inMilliseconds / 1000.0,
-              0.35,
-            ).toDouble(),
-            minSpeechDuration: 0.2,
+            minSilenceDuration: 0.35,
+            minSpeechDuration: 0.3,
             windowSize: 512,
             maxSpeechDuration:
                 max(config.maxActiveDuration.inMilliseconds / 1000.0, 4.0)
@@ -475,12 +468,23 @@ class SherpaVoiceBackend implements VoiceBackend {
         _events.add(VoiceTelemetryEvent.fromMap(event));
         return;
       case 'state':
-        _events.add(VoiceStateEvent.fromMap(event));
+        _events.add(_normalizePlatformState(event));
         return;
       default:
         _events.add(VoiceTelemetryEvent.fromMap(event));
         return;
     }
+  }
+
+  VoiceStateEvent _normalizePlatformState(Map<String, Object?> event) {
+    final normalized = Map<String, Object?>.from(event);
+    if (normalized['state'] == 'listening') {
+      normalized['state'] = VoiceRecognitionState.waitingForWake.wireName;
+      normalized['message'] = _session.messageFor(
+        VoiceRecognitionState.waitingForWake,
+      );
+    }
+    return VoiceStateEvent.fromMap(normalized);
   }
 
   void _handleAudioEvent(Map<String, Object?> event) {
@@ -528,11 +532,11 @@ class SherpaVoiceBackend implements VoiceBackend {
       if (match == null) {
         continue;
       }
-      if (DateTime.now().toUtc().isBefore(_wakeDebounceUntil)) {
+      final decision = _session.handleWakeCandidate(match);
+      if (!decision.accepted) {
         continue;
       }
 
-      _wakeDebounceUntil = DateTime.now().toUtc().add(_config.wakeDebounce);
       _emitWake(match);
       _startActiveSession();
       return;
@@ -545,9 +549,7 @@ class SherpaVoiceBackend implements VoiceBackend {
     }
 
     _activeListening = true;
-    _speechDetected = false;
-    _silenceDuration = Duration.zero;
-    _activeStartedAt = DateTime.now().toUtc();
+    _session.beginActiveListening();
     _lastAsrText = null;
     _lastFinalAsrText = null;
 
@@ -567,8 +569,8 @@ class SherpaVoiceBackend implements VoiceBackend {
 
     _emitState(
       generation: _generation,
-      state: VoiceRecognitionState.wakeDetected,
-      message: '已唤醒，正在收集语音',
+      state: VoiceRecognitionState.activeListening,
+      message: _session.messageFor(VoiceRecognitionState.activeListening),
       listening: true,
       activeListening: true,
     );
@@ -586,29 +588,18 @@ class SherpaVoiceBackend implements VoiceBackend {
     _vad!.acceptWaveform(chunk.samples);
 
     final bool detected = _vad!.isDetected();
-    final Duration activeDuration =
-        DateTime.now().toUtc().difference(_activeStartedAt);
-    final bool commandSpeechArmed =
-        activeDuration >= const Duration(milliseconds: 600);
-    final bool noSpeechTimedOut =
-        activeDuration >= _config.activeNoSpeechTimeout;
-
-    if (detected && commandSpeechArmed) {
-      _speechDetected = true;
-      _silenceDuration = Duration.zero;
-    } else if (_speechDetected) {
-      _silenceDuration += _chunkDuration(chunk);
-    }
+    final VoiceSessionVadDecision vadDecision = _session.observeVad(
+      speechDetected: detected,
+      chunkDuration: _chunkDuration(chunk),
+    );
 
     while (_asrRecognizer!.isReady(_asrStream!)) {
       _asrRecognizer!.decode(_asrStream!);
       _emitPartialAsr();
     }
 
-    if ((!_speechDetected && noSpeechTimedOut) ||
-        (_speechDetected && _silenceDuration >= _config.vadSilence) ||
-        activeDuration >= _config.maxActiveDuration) {
-      _finishActiveSession();
+    if (vadDecision.shouldFinish) {
+      _finishActiveSession(vadDecision.finishReason);
     }
   }
 
@@ -642,10 +633,19 @@ class SherpaVoiceBackend implements VoiceBackend {
     );
   }
 
-  void _finishActiveSession() {
+  void _finishActiveSession(VoiceSessionFinishReason finishReason) {
     if (_asrRecognizer == null || _asrStream == null) {
       return;
     }
+
+    _session.beginProcessingCommand();
+    _emitState(
+      generation: _generation,
+      state: VoiceRecognitionState.processingCommand,
+      message: _session.messageFor(VoiceRecognitionState.processingCommand),
+      listening: true,
+      activeListening: false,
+    );
 
     _asrStream!.inputFinished();
     while (_asrRecognizer!.isReady(_asrStream!)) {
@@ -664,6 +664,9 @@ class SherpaVoiceBackend implements VoiceBackend {
             'type': 'asr',
             'text': transcript,
             'language': _config.modelLanguage.wireName,
+            // Sherpa streaming result does not expose confidence here. The
+            // MVP treats local final ASR as trusted and keeps low-confidence
+            // filtering for engines that can provide a real score.
             'confidence': 1.0,
             'isFinal': true,
           },
@@ -675,7 +678,7 @@ class SherpaVoiceBackend implements VoiceBackend {
       );
 
       final VoiceCommandMatch? commandMatch =
-          VoiceCommandMapper.matchTranscript(
+          _commandMapper.matchFinalTranscript(
         transcript,
         confidence: 1.0,
         bilingualCommands: true,
@@ -702,16 +705,21 @@ class SherpaVoiceBackend implements VoiceBackend {
     _vad!.reset();
 
     _activeListening = false;
-    _speechDetected = false;
-    _silenceDuration = Duration.zero;
+    _session.finishProcessingCommand();
 
-    _emitState(
-      generation: _generation,
-      state: VoiceRecognitionState.cooldown,
-      message: transcript.isEmpty ? '等待下一次唤醒' : '识别完成，回到唤醒模式',
-      listening: true,
-      activeListening: false,
-    );
+    if (finishReason == VoiceSessionFinishReason.noSpeechTimeout) {
+      _events.add(
+        VoiceTelemetryEvent(
+          timestamp: DateTime.now().toUtc(),
+          source: _platformSource(),
+          payload: const <String, Object?>{
+            'type': 'telemetry',
+            'message': 'speech_timeout',
+          },
+          message: 'speech_timeout',
+        ),
+      );
+    }
 
     if (_kwsStream != null) {
       _keywordSpotter!.reset(_kwsStream!);
@@ -723,20 +731,13 @@ class SherpaVoiceBackend implements VoiceBackend {
         ),
       );
     }
-
-    _cooldownTimer?.cancel();
-    _cooldownTimer = Timer(const Duration(milliseconds: 250), () {
-      if (!_listening || _activeListening) {
-        return;
-      }
-      _emitState(
-        generation: _generation,
-        state: VoiceRecognitionState.listening,
-        message: '正在等待唤醒词 ${_config.wakeWord}',
-        listening: true,
-        activeListening: false,
-      );
-    });
+    _emitState(
+      generation: _generation,
+      state: VoiceRecognitionState.waitingForWake,
+      message: _session.messageFor(VoiceRecognitionState.waitingForWake),
+      listening: true,
+      activeListening: false,
+    );
   }
 
   void _appendPreRoll(_AudioChunk chunk) {
@@ -806,8 +807,9 @@ class SherpaVoiceBackend implements VoiceBackend {
           samples: Float32List(0), sampleRate: _config.sampleRate);
     }
 
+    final int rawSampleRate = (event['sampleRate'] as num?)?.toInt() ?? 0;
     final int sampleRate =
-        (event['sampleRate'] as num?)?.toInt() ?? _config.sampleRate;
+        rawSampleRate > 0 ? rawSampleRate : _config.sampleRate;
     final String format = (event['format'] ?? 'pcm16le').toString();
     if (format == 'f32le' || format == 'float32') {
       final Float32List samples = Float32List.view(
@@ -902,6 +904,13 @@ class SherpaVoiceBackend implements VoiceBackend {
         activeListening: activeListening,
       ),
     );
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      unawaited(
+        _platform.updateServiceState(state: state, message: message).catchError(
+              (_) {},
+            ),
+      );
+    }
   }
 
   void _emitError({
@@ -956,16 +965,6 @@ class SherpaVoiceBackend implements VoiceBackend {
 
   String _mapErrorMessage(Object error) {
     return error.toString();
-  }
-
-  String _mapErrorRecoveryHint(Object error) {
-    return VoiceErrorEvent(
-      timestamp: DateTime.now().toUtc(),
-      source: _platformSource(),
-      payload: const <String, Object?>{},
-      code: _mapErrorCode(error),
-      message: _mapErrorMessage(error),
-    ).recoveryHint;
   }
 
   String _bundleNameFromPath(String path) {

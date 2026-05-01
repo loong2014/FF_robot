@@ -35,6 +35,13 @@ abstract class VoiceControlSdkPlatform extends PlatformInterface {
     throw UnimplementedError('stopListening() has not been implemented.');
   }
 
+  Future<void> updateServiceState({
+    required VoiceRecognitionState state,
+    required String message,
+  }) {
+    throw UnimplementedError('updateServiceState() has not been implemented.');
+  }
+
   Stream<Map<String, Object?>> get events {
     throw UnimplementedError('events has not been implemented.');
   }

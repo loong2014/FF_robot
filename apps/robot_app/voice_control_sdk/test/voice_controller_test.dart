@@ -85,7 +85,7 @@ void main() {
         timestamp: DateTime.utc(2024),
         source: VoiceEventSource.android,
         payload: const <String, Object?>{'type': 'state'},
-        state: VoiceRecognitionState.listening,
+        state: VoiceRecognitionState.waitingForWake,
         message: 'ready',
         engine: VoiceEngineType.sherpa,
         listening: true,
@@ -140,7 +140,7 @@ void main() {
     await pumpEventQueue(times: 3);
 
     expect(stateEvents, hasLength(1));
-    expect(stateEvents.single.state, VoiceRecognitionState.listening);
+    expect(stateEvents.single.state, VoiceRecognitionState.waitingForWake);
     expect(asrEvents, hasLength(1));
     expect(asrEvents.single.text, '站起来');
     expect(wakeEvents, hasLength(1));
